@@ -4,3 +4,7 @@
 #bulid
 *.o
 *.o.cmd
+*.mod
+*.mod.cmd
+*.ko
+*.ko.cmd
