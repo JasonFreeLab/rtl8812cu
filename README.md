@@ -1,4 +1,4 @@
-# rtl88x2cu
+# rtl8812cu
 Linux Driver for WiFi Adapters that are based on the RTL8812CU and RTL8822CU Chipsets, based on driver ```v5.15.0.1-197```
 
 This branch is mainly focused on FPV.
