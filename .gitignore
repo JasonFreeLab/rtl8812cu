@@ -8,3 +8,7 @@
 *.mod.cmd
 *.ko
 *.ko.cmd
+*.mod.c
+*.cmd
+*symvers
+*order
