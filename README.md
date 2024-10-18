@@ -182,8 +182,6 @@ Useful when generating any signal without PAPR matters.
 The amplitude of the sine wave seems can not be controlled. It's only a test mode for the LO, so the functionality may not be good enough.
 
 ### Generating the 5.340 GHz Single Tone 
-For TinySA Ultra "Calibration above 5.34 GHz". See the [guide here: tinySA Ultra harmonic mode](https://tinysa.org/wiki/pmwiki.php?n=TinySA4.Harmonic).   
-
 ```
 # 1. Set the adapter to monitor mode (see nic_quick_test.sh)
 # Any 5 GHz channel is ok for the script argument
