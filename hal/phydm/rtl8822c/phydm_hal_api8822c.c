@@ -1752,12 +1752,14 @@ config_phydm_switch_channel_8822c(struct dm_struct *dm, u8 central_ch)
 		}
 	}
 
+#if 0
 	if (iot_table->patch_id_011f0500) {
 		if (central_ch != 1 && dm->en_dis_dpd)
 			phydm_set_dis_dpd_by_rate_8822c(dm, 0x3ff);
 		else
 			phydm_set_dis_dpd_by_rate_8822c(dm, 0x0);
 	}
+#endif
 	/*====================================================================*/
 	if (*dm->mp_mode)
 		phydm_spur_eliminate_8822c(dm, central_ch);
@@ -2205,7 +2207,6 @@ config_phydm_parameter_init_8822c(struct dm_struct *dm,
 {
 	PHYDM_DBG(dm, ODM_PHY_CONFIG, "%s ======>\n", __func__);
 
-	dm->bt_is_linked = false;
 	phydm_cck_gi_bound_8822c(dm);
 	phydm_cck_pd_init_8822c(dm);
 

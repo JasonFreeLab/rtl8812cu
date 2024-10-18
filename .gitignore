@@ -1,0 +1,6 @@
+# VS Code Settings
+.vscode/
+
+#bulid
+*.o
+*.o.cmd

@@ -108,7 +108,7 @@ static s32 update_txdesc(struct xmit_frame *pxmitframe, u8 *pmem, s32 sz, u8 bag
 			SET_TX_DESC_EN_HWSEQ_8822C(ptxdesc, 1);/* Hw set sequence number */
 			SET_TX_DESC_HW_SSN_SEL_8822C(ptxdesc, pattrib->hw_ssn_sel);
 			SET_TX_DESC_EN_HWEXSEQ_8822C(ptxdesc, 0);
-		} else
+		} else {
 			SET_TX_DESC_SW_SEQ_8822C(ptxdesc, pattrib->seqnum);
 		}
 	}
