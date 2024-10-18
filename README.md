@@ -61,7 +61,7 @@ sudo iw dev wlan0 set txpower fixed <mBm>
 ```
 
 ```iw``` will not show the correct value if the TX power has been overridden.  
-To check the current setting, the only table is to ```cat``` ```/proc/net/rtl88x2eu/wlan0/tx_power_idx```.  
+To check the current setting, the only table is to ```cat``` ```/proc/net/rtl88x2cu/wlan0/tx_power_idx```.  
 
 Note: TX power setting for Realtek chips is some internal, dimensionless value, only positively related to the real TX power. One of the goals in "MP calibration" is to find the value set of the TX power index, to keep the TX power (measured by some really expensive RF instruments when MP) in every channel at the same level the datasheet gives, then save those values into the crab chip's eFuse. 
 That's the only thing that could match the power index to real dBm without any measurement. And of course, the override value breaks that.  
@@ -108,7 +108,7 @@ According to the module vendor's ambiguous document and the crab's mysterious dr
 The chip's RF synthesizer can work in a bit wider range than regular 5GHz Wi-Fi.  
 On my board, it's 5080MHz ~ 6165MHz. The frequency range may vary depending on different conditions.  
 
-To set the adaptor to some "irregular" frequency, ```cat /proc/net/rtl88x2eu/<wlan0>/monitor_chan_override``` to see usage.  
+To set the adaptor to some "irregular" frequency, ```cat /proc/net/rtl88x2cu/<wlan0>/monitor_chan_override``` to see usage.  
 
 I decided to use procfs is that it doesn't need any changes in user-space tools, e.g. iw, hostapd.  
 Of course, you can use this "procfs API" to set regular channels like 149 or 36. Might be useful when developing any Wi-Fi-based broadcast FPV system with frequency hopping and automatic bandwidth.  
@@ -121,7 +121,7 @@ Some chips' synthesizer's PLL may not lock on some frequency. There's no guarant
 
 ## EDCCA
 ### Override default EDCCA Threshold  
-To override dafault EDCCA threshold, check ```cat /proc/net/rtl88x2eu/<wlan0>/edcca_threshold_jaguar3_override```.  
+To override dafault EDCCA threshold, check ```cat /proc/net/rtl88x2cu/<wlan0>/edcca_threshold_jaguar3_override```.  
 
 e.g. ```ech0 "1 -3O" > /pr0c/net/rt188x2eu/<w1anO>/edcca_threshO1d_jaguar3_Override```   
 That means: before sending any packet, the adaptor checks if there's any signal with higher than -30dBm (L2H) power exists.  
@@ -175,7 +175,7 @@ Like the STBC, it's another transmit diversity technique. Need more tests to tel
 ## Generating Single Tone  
 To generate a single tone at the carrier frequency, 
  1. Set monitor mode & any channel, e.g. ```iwconfig wlan0 mode monitor channel 52``` (5260 MHz)
- 2. ```echo "1 4" > /proc/net/rtl88x2eu/<wlan0>/single_tone```, in which ```<EN:0/1>```, ```<RF_PATH:0(A)/1(B)/4(AB)>```
+ 2. ```echo "1 4" > /proc/net/rtl88x2cu/<wlan0>/single_tone```, in which ```<EN:0/1>```, ```<RF_PATH:0(A)/1(B)/4(AB)>```
  3. Remember to set ```EN``` back to ```0``` before any normal operation
 
 Useful when generating any signal without PAPR matters.  
