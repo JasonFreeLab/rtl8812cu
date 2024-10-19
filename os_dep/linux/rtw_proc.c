@@ -1599,7 +1599,7 @@ static int proc_get_monitor_chan_override(struct seq_file *m, void *v)
 	struct registry_priv	*pregpriv = &padapter->registrypriv;
 
 	RTW_PRINT_SEL(m, "Unlock Center Frequency\n");
-	RTW_PRINT_SEL(m, "Github: JasonFreeLab/rtl88x2cu\n");
+	RTW_PRINT_SEL(m, "Github: JasonFreeLab/rtl8812cu\n");
 	RTW_PRINT_SEL(m, "\n");
 	RTW_PRINT_SEL(m, "Usage: echo \"<chan> <bw>\" > monitor_chan_override\n");
 	RTW_PRINT_SEL(m, "chan:	16~253, freq=channel*5+5000\n");
@@ -1682,7 +1682,7 @@ static int proc_get_edcca_threshold_jaguar3_override(struct seq_file *m, void *v
 	struct registry_priv	*pregpriv = &padapter->registrypriv;
 
 	RTW_PRINT_SEL(m, "Set EDCCA Threshold Override For Realtek Jaguar3 Series (8723F/8735B/8730A/8822C/8812F/8197G/8822E/8198F/8814B/8814C)\n");
-	RTW_PRINT_SEL(m, "Github: JasonFreeLab/rtl88x2cu\n");
+	RTW_PRINT_SEL(m, "Github: JasonFreeLab/rtl8812cu\n");
 	RTW_PRINT_SEL(m, "\n");
 	RTW_PRINT_SEL(m, "Usage: echo \"<en> <dBm_l2h>\" > edcca_threshold_jaguar3_override\n");
 	RTW_PRINT_SEL(m, "\ten: 0-disable, 1-enable\n");
@@ -1764,7 +1764,7 @@ static int proc_get_slottime_override(struct seq_file *m, void *v)
 	struct mlme_ext_info *pmlmeinfo = &(pmlmeext->mlmext_info);
 
 	RTW_PRINT_SEL(m, "Slot Time Override\n");
-	RTW_PRINT_SEL(m, "Github: JasonFreeLab/rtl88x2cu\n");
+	RTW_PRINT_SEL(m, "Github: JasonFreeLab/rtl8812cu\n");
 	RTW_PRINT_SEL(m, "\n");
 	RTW_PRINT_SEL(m, "See DOI: 10.1109/TMC.2010.27 for why we need tuning this.\n");
 	RTW_PRINT_SEL(m, "\n");
@@ -1840,7 +1840,7 @@ static int proc_get_sifs_override(struct seq_file *m, void *v)
 	struct mlme_ext_info *pmlmeinfo = &(pmlmeext->mlmext_info);
 	
 	RTW_PRINT_SEL(m, "SIFS Override\n");
-	RTW_PRINT_SEL(m, "Github: JasonFreeLab/rtl88x2cu\n");
+	RTW_PRINT_SEL(m, "Github: JasonFreeLab/rtl8812cu\n");
 	RTW_PRINT_SEL(m, "\n");
 	RTW_PRINT_SEL(m, "Usage: echo \"<en> <sifs>\" > sifs_override\n");
 	RTW_PRINT_SEL(m, "en: 0-disable, 1-enable\n");
