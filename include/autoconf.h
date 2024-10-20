@@ -19,8 +19,8 @@
  * Public  General Config
  */
 #define AUTOCONF_INCLUDED
-#define RTL871X_MODULE_NAME "88x2CU"
-#define DRV_NAME "rtl88x2cu"
+#define RTL871X_MODULE_NAME "8812CU"
+#define DRV_NAME "rtl8812cu"
 
 /* Set CONFIG_RTL8822C from Makefile */
 #ifndef CONFIG_RTL8822C

@@ -1036,7 +1036,6 @@ endif
 ifeq ($(CONFIG_SDIO_HCI), y)
 MODULE_NAME = 88x2cs
 endif
-
 endif
 
 ########### HAL_RTL8814B #################################

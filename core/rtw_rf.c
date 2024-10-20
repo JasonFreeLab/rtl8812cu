@@ -1175,7 +1175,7 @@ int rtw_freq2ch(int freq)
 		return (freq - 2407) / 5;
 	else if (freq >= 4910 && freq <= 4980)
 		return (freq - 4000) / 5;
-	else if (freq >= 5000 && freq < 6280)	// this driver is dedicated to a 5GHz-only RTL8812/8822eu, so...
+	else if (freq >= 5000 && freq < 6280)	// this driver is dedicated to a 5GHz-only RTL8812/8822cu, so...
 		return (freq - 5000) / 5;
 	else if (freq >= 5950 && freq <= 7215)
 		return (freq - 5950) / 5;
