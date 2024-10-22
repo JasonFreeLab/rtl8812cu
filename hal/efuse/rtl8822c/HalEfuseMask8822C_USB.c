@@ -138,6 +138,10 @@ u8 Array_MP_8822C_MUSB[] = {
 	0x00,
 };
 
+u8 Array_Ver_MP_8822C_MUSB[] = {
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00,0x00
+};
+
 /* BT eFuse Mask */
 
 u16 EFUSE_GetBTArrayLen_MP_8822C_MUSB(void)
@@ -195,3 +199,18 @@ BOOLEAN EFUSE_IsAddressMasked_MP_8822C_MUSB(u16 Offset)
 
 	return (result > 0) ? 0 : 1;
 }
+
+void EFUSE_Ver_GetArray_MP_8822C_MUSB(u8 *Array)
+{
+	u16 len = EFUSE_Ver_GetArrayLen_MP_8822C_MUSB(), i = 0;
+
+	for (i = 0; i < len; ++i)
+		Array[i] = Array_Ver_MP_8822C_MUSB[i];
+}
+
+/*	WiFi eFuse Mask Ver */
+u16 EFUSE_Ver_GetArrayLen_MP_8822C_MUSB(void)
+{
+	return sizeof(Array_Ver_MP_8822C_MUSB) / sizeof(u8);
+}
+

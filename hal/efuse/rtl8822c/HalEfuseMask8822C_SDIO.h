@@ -32,3 +32,7 @@ void EFUSE_GetBTMaskArray_MP_8822C_MSDIO(u8 *Array);
 
 BOOLEAN EFUSE_IsBTAddressMasked_MP_8822C_MSDIO(u16 Offset);
 
+void EFUSE_Ver_GetArray_MP_8822C_MSDIO(u8 *Array);
+
+u16 EFUSE_Ver_GetArrayLen_MP_8822C_MSDIO(void);
+
