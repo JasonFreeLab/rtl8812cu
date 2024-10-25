@@ -234,6 +234,7 @@ CONFIG_PLATFORM_RTL8197D = n
 CONFIG_PLATFORM_AML_S905 = n
 CONFIG_PLATFORM_ZTE_ZX296716 = n
 CONFIG_PLATFORM_MTK9612 = n
+CONFIG_PLATFORM_ARM_RK1106 = n
 ########### CUSTOMER ################################
 CONFIG_CUSTOMER_HUAWEI_GENERAL = n
 
@@ -2069,6 +2070,17 @@ endif
 endif
 
 ifeq ($(CONFIG_PLATFORM_HISILICON_HI3798), y)
+ifeq ($(CFG_HI_EXPORT_FLAG),)
+    ifneq ($(srctree),)
+    KERNEL_DIR := $(srctree)
+
+    SDK_DIR := $(shell cd $(KERNEL_DIR)/../../.. && /bin/pwd)
+    else
+    SDK_DIR := $(shell cd $(CURDIR)/../../../../../.. && /bin/pwd)
+    endif
+
+    include $(SDK_DIR)/base.mak
+endif
 EXTRA_CFLAGS += -DCONFIG_PLATFORM_HISILICON
 EXTRA_CFLAGS += -DCONFIG_PLATFORM_HISILICON_HI3798
 #EXTRA_CFLAGS += -DCONFIG_PLATFORM_HISILICON_HI3798_MV200_HDMI_DONGLE
@@ -2088,11 +2100,10 @@ EXTRA_CFLAGS += -DRTW_USE_CFG80211_STA_EVENT
 #EXTRA_CFLAGS += -DCONFIG_HISI_SDIO_ID=1
 #endif
 
-ARCH ?= arm
-CROSS_COMPILE ?= /HiSTBAndroidV600R003C00SPC021_git_0512/device/hisilicon/bigfish/sdk/tools/linux/toolchains/arm-histbv310-linux/bin/arm-histbv310-linux-
+ARCH := $(CFG_HI_CPU_ARCH)
+CROSS_COMPILE := $(HI_KERNEL_TOOLCHAINS_NAME)-
 ifndef KSRC
-KSRC := /HiSTBAndroidV600R003C00SPC021_git_0512/device/hisilicon/bigfish/sdk/source/kernel/linux-3.18.y
-KSRC += O=/HiSTBAndroidV600R003C00SPC021_git_0512/out/target/product/Hi3798MV200/obj/KERNEL_OBJ
+KSRC := $(LINUX_DIR)
 endif
 
 ifeq ($(CONFIG_RTL8822B), y)
@@ -2409,6 +2420,24 @@ ifeq ($(CONFIG_USB_HCI), y)
 EXTRA_CFLAGS += -DCONFIG_USE_USB_BUFFER_ALLOC_TX -DCONFIG_FIX_NR_BULKIN_BUFFER
 endif
 endif
+
+ifeq ($(CONFIG_PLATFORM_ARM_RK1106), y)
+EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN -DANDROID_PLATFORM -DCONFIG_PLATFORM_ROCKCHIP #-DCONFIG_MINIMAL_MEMORY_USAGE
+
+# default setting for Android 4.1, 4.2, 4.3, 4.4
+EXTRA_CFLAGS += -DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT
+EXTRA_CFLAGS += -DCONFIG_CONCURRENT_MODE
+
+# default setting for Power control
+# EXTRA_CFLAGS += -DRTW_ENABLE_WIFI_CONTROL_FUNC
+
+# default setting for Special function
+ARCH ?= arm
+CROSS_COMPILE ?= arm-rockchip830-linux-uclibcgnueabihf-
+KSRC ?= $(shell pwd)/../../../source/kernel
+MODULE_NAME := 8812cu
+endif
+
 ########### CUSTOMER ################################
 ifeq ($(CONFIG_CUSTOMER_HUAWEI_GENERAL), y)
 CONFIG_CUSTOMER_HUAWEI = y
