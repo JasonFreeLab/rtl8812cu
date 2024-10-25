@@ -1,3 +1,4 @@
+![realtek_logo](doc/image/realtek_logo.png)
 # rtl8812cu
 Linux Driver for WiFi Adapters that are based on the RTL8812CU and RTL8822CU Chipsets, based on driver ```v5.15.0.1-197```
 
@@ -73,31 +74,44 @@ sudo ip link set wlan0 up
 or...
 sudo ifconfig wlan0 up
 ```
-### Set RF channel
+### Set RF channel and bandwidth
 ```
 iwlist wlan0 channel
-sudo iwconfig wlan0 channel 36 
-```
-### For setting TX power to a fixed index (1=min, 63=max)
-```
-sudo iwconfig wlan0 txpower -30
-or
-sudo iw wlan0 set txpower fixed -3000
+# sudo iw dev wlan0 set channel 165 10MHz
+# sudo iw dev wlan0 set channel 165 5MHz
+# sudo iw dev wlan0 set channel 165 HT40-
+# sudo iw dev wlan0 set channel 165 HT40+
+sudo iw dev wlan0 set channel 165 HT20
 ```
 ### For setting TX power to a fixed mBm (0=min, 3150=max). 
-The real TX power measured increased accordingly when increasing the mbm value. e.g. when mbm increases by 500, the signal strength increases by +5dB, but when mbm is higher than ~2000, the PA starts to saturate and the increase becomes smaller
+The real TX power measured increased accordingly when increasing the mbm value. When mbm increases by 500, the signal strength increases by +5dB, but when mbm is higher than ~2000, the PA starts to saturate and the increase becomes smaller
 ```
 sudo iw dev wlan0 set txpower fixed <mBm>
 ```
 
-```iw``` will not show the correct value if the TX power has been overridden.  
-To check the current setting, the only table is to:
+```iw``` will not show the correct value if the TX power has been overridden. To check the current setting, the only table is to:
 ```
 cat /proc/net/rtl8812cu/wlan0/tx_power_idx
 ```
 
-Note: TX power setting for Realtek chips is some internal, dimensionless value, only positively related to the real TX power. One of the goals in "MP calibration" is to find the value set of the TX power index, to keep the TX power (measured by some really expensive RF instruments when MP) in every channel at the same level the datasheet gives, then save those values into the crab chip's eFuse. 
-That's the only thing that could match the power index to real dBm without any measurement. And of course, the override value breaks that.  
+Note: TX power setting for Realtek chips is some internal, dimensionless value, only positively related to the real TX power. One of the goals in "MP calibration" is to find the value set of the TX power index, to keep the TX power in every channel at the same level the datasheet gives, then save those values into the crab chip's eFuse. 
+That's the only thing that could match the power index to real dBm without any measurement.
+
+#### ANT0_5825MHz_20M_11n_MCS1_mBm=1700
+RF power 21dBm, offset 4dB for  tx_power_idx, EVM -20dB, Mask Margins 6dB(min). 
+![realtek_logo](doc/image/ANT0_5825MHz_20M_11n_MCS1_mBm=1700.jpg)
+
+#### ANT0_5825MHz_20M_11n_MCS1_mBm=1800
+RF power 23dBm, offset 5dB for  tx_power_idx, EVM -15dB, Mask Margins -1dB(min). Tx performance has deteriorated.
+![realtek_logo](doc/image/ANT0_5825MHz_20M_11n_MCS1_mBm=1800.jpg)
+
+#### ANT0_5825MHz_20M_11n_MCS1_mBm=2000
+RF power 24.4dBm, offset 4dB for  tx_power_idx, EVM -13dB, Mask Margins -5dB(min). Tx performance has deteriorated.
+![realtek_logo](doc/image/ANT0_5825MHz_20M_11n_MCS1_mBm=2000.jpg)
+
+#### ANT0_5825MHz_20MHz_11n_MCS7_mBm=1200
+RF power 18dBm, offset 6dB for  tx_power_idx, EVM -29dB, Mask Margins 15dB(min). ```-M 7``` in ```wfb_tx``` to change MCS.
+![realtek_logo](doc/image/ANT0_5825MHz_20MHz_11n_MCS7_mBm=1200.jpg)
 
 ### Check RF channel data
 Check if there is any data on the rf channel.
@@ -109,10 +123,17 @@ sudo tcpdump -i wlan0
 ### Injection in Different Bandwidth
 #### 10MHz Injection
 To transmit packets in monitor mode using packet injection:
- - Set ```iw <wlan> set channel <same_channel> <10MHz>``` on both air & ground
+ - Set  on both air & ground
+ ```
+ sudo iw dev wlan0 set channel 165 10MHz
+ ```
  - Set the inject packet's radiotap header with any **20MHz bandwidth** modulation (legacy/HT20/VHT20; e.g. ```-B 20``` in ```wfb_tx```) 
 Then the packet is actually transmitted in 10MHz bandwidth, which seems like being achieved by simply underclocking the baseband.  
-It's the same on the receiver side, though in which the radiotap header in received packets still indicates a 20MHz bandwidth. You can check that with any SDR receiver or spectrum analyzer.   
+It's the same on the receiver side, though in which the radiotap header in received packets still indicates a 20MHz bandwidth. You can check that with any SDR receiver or spectrum analyzer.
+
+###### ANT0_5825MHz_10M_11n_MCS1_mBm=1700
+RF power 20dBm, offset 3dB for tx_power_idx, EVM -22dB, Mask Margins 6dB(min). 
+![realtek_logo](doc/image/ANT0_5825MHz_10M_11n_MCS1_mBm=1700.jpg)
 
 ##### Notes About "Devices or Resources Busy" 
 When ```iw``` says ```Devices or Resources Busy (-16)```, check ```iw <wlan> info``` if the ```iw``` recognized the adaptor is in monitor mode.   
@@ -122,9 +143,15 @@ That's because:
 2. the cfg80211 API checks [here](https://github.com/OpenIPC/linux/blob/eb50a943c26845925ff11ccb1651c40fa02c105e/net/wireless/chan.c#L862) if there's any other interface is not in monitor mode
 3. If the monitor mode is set by ```iwconfig```, the process is done by calling the old WEXT APIs, so the cfg80211-based ```iw``` may not get the latest status and think the interface is still in managed mode
 
-##### Notes About 5MHz 
-Some leakage (mirror?) can be observed in the 5MHz mode, and I have no idea how to configure the DAC clock properly as there are no even definitions in .h files. So, 5MHz is not recommended.
-If you need 5MHz BW on the 5.8GHz band, check 8812cu/8731bu/ath9k.
+##### 5MHz Injection
+To transmit packets in monitor mode using packet injection:
+ - Set  on both air & ground
+ ```
+ sudo iw dev wlan0 set channel 165 5MHz
+ ```
+###### ANT0_5825MHz_5M_11n_MCS1_mBm=1700
+RF power 20dBm, offset 3dB for tx_power_idx, EVM -22dB, Mask Margins 3dB(min). 
+![realtek_logo](doc/image/ANT0_5825MHz_5M_11n_MCS1_mBm=1700.jpg)
 
 ##### Note about Changing TX Power in Narrowband Modes
 Changing TX power by ```iw``` will not work when injecting with 10MHz BW.  
@@ -144,16 +171,50 @@ According to the module vendor's ambiguous document and the crab's mysterious dr
 7. Check ```/proc/net/rtl8812cu/<wlan>/rate_ctl``` for manually control of the rate if needed. See [@Vito-Swift's tutorial here](https://github.com/Vito-Swift/rtl8814au-ext/blob/main/doc/how_to_do_unicast_rc.md)  
 
 ## Set (Unlocked) Channel in procfs  
-The chip's RF synthesizer can work in a bit wider range than regular 5GHz Wi-Fi.  
-On my board, it's 5080MHz ~ 6165MHz. The frequency range may vary depending on different conditions.  
+The chip's RF synthesizer can work in a bit wider range than regular 5GHz Wi-Fi. May be 5080MHz ~ 6165MHz. 
 
-To set the adaptor to some "irregular" frequency, ```cat /proc/net/rtl8812cu/wlan0/monitor_chan_override``` to see usage.  
+To see usage.  
+```
+cat /proc/net/rtl8812cu/wlan0/monitor_chan_override
+```
+
+Usage: echo "<chan> <bw>" > monitor_chan_override.  
+chan:	16~253, freq=channel*5+5000.  
+bw:	10/20/40/80, MHz. Not determing the bandwidth, but should be the same as 'iw'.  
+1. To transmit in 6005MHz with 10MHz BW, you should: 
+	 - use 'iw' to set the bandwidth to 10MHz in any channel 
+	 - use '-B 20' in 'wfb-ng' or any other tools
+	 - echo "201 10" > monitor_chan_override
+
+2. To transmit in 5080MHz with 20MHz BW: 
+	 - use 'iw' to set the bandwidth to 20MHz in any channel 
+	 - use '-B 20' in 'wfb-ng' or any other tools
+	 - echo "16 20" > monitor_chan_override
+
+3. To transmit in 5255MHz with 40MHz BW: 
+	 - use 'iw' to set the bandwidth to HT40 in any channel 
+	 - use '-B 40' in 'wfb-ng' or any other tools
+	 - echo "51 40" > monitor_chan_override
+
+Disclaimer: Some chip may not lock on some frequency. There's no guarantee on performance. The unlocked frequency may damage your hardware. You should obey the law, and use it at your own risk.
 
 I decided to use procfs is that it doesn't need any changes in user-space tools, e.g. iw, hostapd.  
 Of course, you can use this "procfs API" to set regular channels like 149 or 36. Might be useful when developing any Wi-Fi-based broadcast FPV system with frequency hopping and automatic bandwidth.  
 
 I recommend using ```iw``` to set the channel first if the channel is usable. Only use the procfs method for irregular.  
 The channel can only be set to any frequency with a 5MHz step since the channel number was directly written into some register, not some divider of the synthesizer. 
+
+### ANT0_5925MHz_10M_11n_MCS1_mBm=1700
+RF power 20dBm, offset 3dB for tx_power_idx, EVM -22dB, Mask Margins 7dB(min). 
+![realtek_logo](doc/image/ANT0_5925MHz_10M_11n_MCS1_mBm=1700.jpg)
+
+### ANT0_6000MHz_10M_11n_MCS1_mBm=1700
+RF power 19dBm, offset 2dB for tx_power_idx, EVM -26dB, Mask Margins 10dB(min). 
+![realtek_logo](doc/image/ANT0_6000MHz_10M_11n_MCS1_mBm=1700.jpg)
+
+### ANT0_6000MHz_10M_11n_MCS1_mBm=1800
+RF power 22dBm, offset 4dB for tx_power_idx, EVM -17dB, Mask Margins -1dB(min). Tx performance has deteriorated.
+![realtek_logo](doc/image/ANT0_6000MHz_10M_11n_MCS1_mBm=1800.jpg)
 
 DISCLAIMER:  
 Some chips' synthesizer's PLL may not lock on some frequency. There's no guarantee of its performance. (Actually, TX power and distortion seem worse in these channels as it's not calibrated. But less interference - it's an either-or)
@@ -163,11 +224,11 @@ Some chips' synthesizer's PLL may not lock on some frequency. There's no guarant
 To override dafault EDCCA threshold, check ```cat /proc/net/rtl8812cu/wlan0/edcca_threshold_jaguar3_override```.  
 
 e.g. ```echo "1 -30" > /proc/net/rtl8812cu/wlan0/edcca_threshO1d_jaguar3_Override```   
-That means: before sending any packet, the adaptor checks if there's any signal with higher than -30dBm (L2H) power exists.  
-If there are any, the adaptor will wait until the energy level in the air is lower than -38dBm (H2L). Then your transmission starts.   
+That means: before sending any packet, the adaptor checks if there's any signal with higher than -30dBm (L2H) power exists.
+If there are any, the adaptor will wait until the energy level in the air is lower than -38dBm (H2L). Then your transmission starts.
 
-Note that there are actually two values, L2H and H2L. The L2H is typically set 8dB higher so it creates a hysteresis.   
-The value you're setting is L2H. The H2L is automatically set 8dB lower.  
+Note that there are actually two values, L2H and H2L. The L2H is typically set 8dB higher so it creates a hysteresis.
+The value you're setting is L2H. The H2L is automatically set 8dB lower.
 
 ### Disable CCA (EXPERIMENTAL)
 ```echo "1" > /proc/net/rtl8812cu/wlan0/dis_cca```  
@@ -221,32 +282,37 @@ Useful when generating any signal without PAPR matters.
 The amplitude of the sine wave seems can not be controlled. It's only a test mode for the LO, so the functionality may not be good enough.
 
 ### Generating the 5.340 GHz Single Tone 
-```
-# 1. Set the adapter to monitor mode (see nic_quick_test.sh)
-# Any 5 GHz channel is ok for the script argument
-sudo ./nic_quick_test.sh wlan0 60
+1. Set the adapter to monitor mode (see nic_quick_test.sh). Any 5 GHz channel is ok for the script argument.
+    ```
+    sudo ./nic_quick_test.sh wlan0 60
+    ```
+2. Set the center frequency to 5.340 GHz (Channel 68). The frequency is usually disabled due to wireless regulation, so use /proc
+    ```
+    echo "68 20" > /proc/net/rtl8812cu/wlan0/monitor_chan_override   # freq = 5000+68*5 = 5340 MHz
+    ```
+3. Generate single tone. The blue square has two IPEX connector J0 and J1 (see BL-M8812CU2 datasheet)
+    ```
+    echo "1 0" > /proc/net/rtl8812cu/wlan0/single_tone               # Output at J0 only
+    # echo "1 1" > /proc/net/rtl8812cu/wlan0/single_tone              # Output at J1 only
+    # echo "1 4" > /proc/net/rtl8812cu/wlan0/single_tone              # Output at both J0 and J1
+    ```
+4. Change to some other frequency
+    ```
+    echo "0 0" > /proc/net/rtl8812cu/wlan0/single_tone            # !! ALWAYS DISABLE THE OUTPUT FIRST !!
+    echo "69 20" > /proc/net/rtl8812cu/wlan0/monitor_chan_override   # 5345 MHz
+    echo "1 0" > /proc/net/rtl8812cu/wlan0/single_tone               # Output at J0 only
+    ```
+5. Change to some other frequency
+    ```
+    echo "0 0" > /proc/net/rtl8812cu/wlan0/single_tone            # !! ALWAYS DISABLE THE OUTPUT FIRST !!
+    echo "67 20" > /proc/net/rtl8812cu/wlan0/monitor_chan_override   # 5335 MHz
+    echo "1 0" > /proc/net/rtl8812cu/wlan0/single_tone               # Output at J0 only
+    ```
+6. Disable the output
+    ```
+    echo "0 0" > /proc/net/rtl8812cu/wlan0/single_tone               # !! DISABLE THE OUTPUT !!
+    ```
 
-# 2. Set the center frequency to 5.340 GHz (Channel 68)
-# The frequency is usually disabled due to wireless regulation, so use /proc
-echo "68 20" > /proc/net/rtl8812cu/wlan0/monitor_chan_override   # freq = 5000+68*5 = 5340 MHz
-
-# 3. Generate single tone
-# The blue square has two IPEX connector J0 and J1 (see BL-M8812CU2 datasheet)
-echo "1 0" > /proc/net/rtl8812cu/wlan0/single_tone               # Output at J0 only
-# echo "1 1" > /proc/net/rtl8812cu/wlan0/single_tone              # Output at J1 only
-# echo "1 4" > /proc/net/rtl8812cu/wlan0/single_tone              # Output at both J0 and J1
-
-# 4. Change to some other frequency (e.g. manually tuning by ```leveloffset harmonic```)
-echo "0 0" > /proc/net/rtl8812cu/wlan0/single_tone               # !! ALWAYS DISABLE THE OUTPUT FIRST !!
-echo "69 20" > /proc/net/rtl8812cu/wlan0/monitor_chan_override   # 5345 MHz
-echo "1 0" > /proc/net/rtl8812cu/wlan0/single_tone               # Output at J0 only
-# ... do some calibration stuff
-echo "0 0" > /proc/net/rtl8812cu/wlan0/single_tone               # !! ALWAYS DISABLE THE OUTPUT FIRST !!
-echo "67 20" > /proc/net/rtl8812cu/wlan0/monitor_chan_override   # 5335 MHz
-echo "1 0" > /proc/net/rtl8812cu/wlan0/single_tone               # Output at J0 only
-# ... do some calibration stuff
-
-# 5. disable the output
-echo "0 0" > /proc/net/rtl8812cu/wlan0/single_tone               # !! DISABLE THE OUTPUT !!
-
-```
+### ANT0_5340MHz_Single_Tone
+RF power 15dBm. 
+![realtek_logo](doc/image/ANT0_5340MHz_Single_Tone.jpg)
