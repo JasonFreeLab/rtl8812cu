@@ -2434,7 +2434,7 @@ EXTRA_CFLAGS += -DCONFIG_CONCURRENT_MODE
 # default setting for Special function
 ARCH ?= arm
 CROSS_COMPILE ?= arm-rockchip830-linux-uclibcgnueabihf-
-KSRC ?= $(shell pwd)/../../../source/kernel
+KSRC ?= $(LUCKFOX_SDK_PATH)/sysdrv/source/kernel
 MODULE_NAME := 8812cu
 endif
 
