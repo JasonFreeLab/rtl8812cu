@@ -40,5 +40,5 @@ echo "    bf_mon.sh start <WLAN_DRV> <NIC> <LOCAL_MAC> <REMOTE_MAC> <BW:20/40/80
 echo "    bf_mon.sh stop <WLAN_DRV> <NIC>"
 echo ""
 echo "e.g. "
-echo "    bf_mon.sh start rtl88x2cu wlan0 00:11:22:33:44:55 00:66:77:88:99:ab 20 255 0.1"
-echo "    bf_mon.sh stop rtl88x2cu wlan0"
+echo "    bf_mon.sh start rtl8812cu wlan0 00:11:22:33:44:55 00:66:77:88:99:ab 20 255 0.1"
+echo "    bf_mon.sh stop rtl8812cu wlan0"
