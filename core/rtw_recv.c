@@ -4137,6 +4137,10 @@ int recv_frame_monitor(_adapter *padapter, union recv_frame *rframe)
 	if (rframe == NULL)
 		goto exit;
 
+#ifdef CONFIG_BEAMFORMING_MONITOR
+        bf_monitor_get_report_packet(padapter, rframe);
+#endif
+
 	/* read skb information from recv frame */
 	pskb = rframe->u.hdr.pkt;
 	pskb->len = rframe->u.hdr.len;

@@ -21,6 +21,13 @@ EXTRA_CFLAGS += -DCONFIG_REGD_SRC_FROM_OS
 # TX NPATH config
 EXTRA_CFLAGS += -DCONFIG_RTW_TX_NPATH_EN
 
+# Monitor Beamforming
+#EXTRA_CFLAGS += -DCONFIG_BEAMFORMING_MONITOR
+
+# ACS
+EXTRA_CFLAGS += -DCONFIG_RTW_ACS
+EXTRA_CFLAGS += -DCONFIG_RTW_ACS_DBG
+
 ############ ANDROID COMMON KERNEL ############
 # clang
 ifeq ($(CC), clang)
@@ -1037,6 +1044,7 @@ endif
 ifeq ($(CONFIG_SDIO_HCI), y)
 MODULE_NAME = 88x2cs
 endif
+
 endif
 
 ########### HAL_RTL8814B #################################

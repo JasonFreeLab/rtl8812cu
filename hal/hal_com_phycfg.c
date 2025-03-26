@@ -1720,8 +1720,6 @@ static void phy_set_target_txpwr(
 		return;
 	}
 
-	Value = get_overridden_tx_power_index(Value);
-
 	if (Band == BAND_ON_2_4G)
 		pHalData->target_txpwr_2g[RfPath][RateSection] = Value;
 	else /* BAND_ON_5G */
@@ -2354,8 +2352,6 @@ phy_set_tx_power_index_by_rate_section(
 		goto exit;
 
 	for (i = 0; i < rates_by_sections[rs].rate_num; ++i) {
-		powerIndex = (u32)get_overridden_tx_power_index((u8)powerIndex);
-		// to-do: is that really overrided? thinking when doing copy & paste
 #if DBG_TX_POWER_IDX
 		struct txpwr_idx_comp tic;
 
@@ -4009,7 +4005,6 @@ PHY_SetTxPowerIndex(
 		u8				Rate
 )
 {
-	PowerIndex = (u32)get_overridden_tx_power_index((u8)PowerIndex);
 	rtw_hal_set_tx_power_index(pAdapter, PowerIndex, RFPath, Rate);
 }
 
@@ -6257,7 +6252,6 @@ u8 hal_com_get_txpwr_idx(_adapter *adapter, enum rf_path rfpath
 		base = phy_get_pg_txpwr_idx(adapter, rfpath, rs, ntx_idx, bw, band, cch);
 		rs_target = phy_get_target_txpwr(adapter, band, rfpath, rs);
 		power_idx = base + (rate_target - rs_target) + (rate_amends);
-		power_idx = get_overridden_tx_power_index(power_idx);
 		if (tic) {
 			if (tic->utarget == hal_spec->txgi_max)
 				tic->by_rate -= rs_target;
@@ -6288,7 +6282,6 @@ u8 hal_com_get_txpwr_idx(_adapter *adapter, enum rf_path rfpath
 		mcs7_idx = phy_get_tssi_txpwr_by_rate_ref(adapter, rfpath, bw, cch, opch);
 		base = halrf_get_tssi_codeword_for_txindex(adapter_to_phydm(adapter)) - mcs7_idx;
 		power_idx = base + rate_target + rate_amends;
-		power_idx = get_overridden_tx_power_index(power_idx);
 #else
 		base = 0;
 		power_idx = rate_target + rate_amends;
@@ -6343,7 +6336,6 @@ static s16 phy_get_txpwr_mbm(_adapter *adapter, u8 rfpath, RATE_SECTION rs, u8 r
 			val += mb_of_ntx(ntx_idx + 1);
 		if (eirp)
 			val += rfctl->antenna_gain;
-
 		if (max == UNSPECIFIED_MBM || max < val)
 			max = val;
 	}
@@ -6377,6 +6369,7 @@ static s16 _phy_get_txpwr_max_mbm(_adapter *adapter, s8 rfpath
 	, enum channel_width bw, u8 cch, u8 opch, u16 bmp_cck_ofdm, u32 bmp_ht, u64 bmp_vht, bool reg_max, bool eirp)
 {
 	struct hal_spec_t *hal_spec = GET_HAL_SPEC(adapter);
+	struct mlme_priv *mlme;
 	HAL_DATA_TYPE *hal_data = GET_HAL_DATA(adapter);
 	BAND_TYPE band = cch <= 14 ? BAND_ON_2_4G : BAND_ON_5G;
 	u8 tx_num;
@@ -6384,7 +6377,8 @@ static s16 _phy_get_txpwr_max_mbm(_adapter *adapter, s8 rfpath
 	u8 hw_rate;
 	int i;
 	s16 max = UNSPECIFIED_MBM, mbm;
-
+  
+        mlme = &adapter->mlmepriv;
 	if (0)
 		RTW_INFO("cck_ofdm:0x%04x, ht:0x%08x, vht:0x%016llx\n", bmp_cck_ofdm, bmp_ht, bmp_vht);
 
@@ -6398,25 +6392,26 @@ static s16 _phy_get_txpwr_max_mbm(_adapter *adapter, s8 rfpath
 		
 		if (IS_VHT_RATE_SECTION(rs) && !IS_HARDWARE_TYPE_JAGUAR_ALL(adapter))
 			continue;
-		
+
 		for (i = 0; i < rates_by_sections[rs].rate_num; i++) {
 			hw_rate = MRateToHwRate(rates_by_sections[rs].rates[i]);
-			if (IS_LEGACY_HRATE(hw_rate)) {
-				if (!(bmp_cck_ofdm & BIT(hw_rate)))
-					continue;
-			} else if (IS_HT_HRATE(hw_rate)) {
-				if (!(bmp_ht & BIT(hw_rate - DESC_RATEMCS0)))
-					continue;
-			} else if (IS_VHT_HRATE(hw_rate)) {
-				if (!(bmp_vht & BIT_ULL(hw_rate - DESC_RATEVHTSS1MCS0)))
-					continue;
+                        if (!check_fwstate(mlme, WIFI_MONITOR_STATE)) {
+		            if (IS_LEGACY_HRATE(hw_rate)) {
+			            if (!(bmp_cck_ofdm & BIT(hw_rate)))
+				            continue;
+		            } else if (IS_HT_HRATE(hw_rate)) {
+			            if (!(bmp_ht & BIT(hw_rate - DESC_RATEMCS0)))
+				            continue;
+		            } else if (IS_VHT_HRATE(hw_rate)) {
+			            if (!(bmp_vht & BIT_ULL(hw_rate - DESC_RATEVHTSS1MCS0)))
+				            continue;
+		            }
 			}
-
+			
 			if (rfpath < 0) /* total */
 				mbm = phy_get_txpwr_total_mbm(adapter, rs, rates_by_sections[rs].rates[i], bw, cch, opch, reg_max, eirp, NULL);
 			else
 				mbm = phy_get_txpwr_single_mbm(adapter, rfpath, rs, rates_by_sections[rs].rates[i], bw, cch, opch, reg_max, eirp, NULL);
-
 			if (max == UNSPECIFIED_MBM || mbm > max)
 				max = mbm;
 		}

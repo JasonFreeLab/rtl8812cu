@@ -755,6 +755,12 @@
 		#define RTW_BEAMFORMING_VERSION_2
 	#endif /* CONFIG_BEAMFORMING */
 
+	/* Beamforming for monitor mode (without AP/STA assoc) */
+	#ifdef CONFIG_BEAMFORMING_MONITOR
+		#undef CONFIG_BEAMFORMING
+		#undef RTW_BEAMFORMING_VERSION_2
+	#endif /* CONFIG_BEAMFORMING_MONITOR */
+
 	#ifdef CONFIG_NO_FW
 		#ifdef CONFIG_RTW_MAC_HIDDEN_RPT
 			#undef CONFIG_RTW_MAC_HIDDEN_RPT
