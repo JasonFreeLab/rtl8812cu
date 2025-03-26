@@ -775,8 +775,6 @@ void rtl8822c_set_tx_power_index(PADAPTER adapter, u32 powerindex, enum rf_path 
 
 	rate = MRateToHwRate(rate);
 
-	powerindex = (u32)get_overridden_tx_power_index((u8)powerindex);
-
 	/*
 	* For 8822C, phydm api use 4 bytes txagc value
 	* driver must combine every four 1 byte to one 4 byte and send to phydm api
@@ -1627,8 +1625,6 @@ static void _config_beamformer_su(PADAPTER adapter, struct beamformer_entry *bfe
 
 static void _config_beamformer_mu(PADAPTER adapter, struct beamformer_entry *bfer)
 {
-	/* General */
-	PHAL_DATA_TYPE hal;
 	/* Beamforming */
 	struct beamforming_info *bf_info;
 	u8 nc_index = 0, nr_index = 0;
@@ -1640,7 +1636,6 @@ static void _config_beamformer_mu(PADAPTER adapter, struct beamformer_entry *bfe
 
 	RTW_INFO("%s: Config MU BFer entry HW setting\n", __FUNCTION__);
 
-	hal = GET_HAL_DATA(adapter);
 	bf_info = GET_BEAMFORM_INFO(adapter);
 
 	/* Reset GID table */
