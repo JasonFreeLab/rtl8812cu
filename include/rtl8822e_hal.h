@@ -37,7 +37,9 @@
 #ifdef CONFIG_PCI_HCI
 #define MAX_RECVBUF_SZ		12288	/* 12KB */
 #else
+#ifndef MAX_RECVBUF_SZ
 #define MAX_RECVBUF_SZ		24576	/* 24KB, TX: 256KB */
+#endif
 #endif /* !CONFIG_PCI_HCI */
 #endif /* !CONFIG_SUPPORT_TRX_SHARED */
 

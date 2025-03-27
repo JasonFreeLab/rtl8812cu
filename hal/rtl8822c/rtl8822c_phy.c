@@ -244,7 +244,7 @@ static u8 _init_rf_reg(PADAPTER adapter)
 			status = odm_config_rf_with_header_file(&hal->odmpriv, CONFIG_RF_RADIO, phydm_path);
 			if (HAL_STATUS_SUCCESS != status)
 				goto exit;
-			/* ret = _TRUE; */
+			ret = _TRUE;
 		}
 	}
 
@@ -452,12 +452,10 @@ static void init_phydm_cominfo(PADAPTER adapter)
 	RTW_INFO("%s: Fv=%d Cv=%d\n", __FUNCTION__, hal->version_id.VendorType, hal->version_id.CUTVersion);
 	odm_cmn_info_init(p_dm_odm, ODM_CMNINFO_FAB_VER, hal->version_id.VendorType);
 	odm_cmn_info_init(p_dm_odm, ODM_CMNINFO_CUT_VER, hal->version_id.CUTVersion);
-	odm_cmn_info_init(p_dm_odm, ODM_CMNINFO_DIS_DPD, _FALSE);
+	odm_cmn_info_init(p_dm_odm, ODM_CMNINFO_DIS_DPD
+		, hal->txpwr_pg_mode == TXPWR_PG_WITH_PWR_IDX ? _TRUE : _FALSE);
 	odm_cmn_info_init(p_dm_odm, ODM_CMNINFO_TSSI_ENABLE
 		, hal->txpwr_pg_mode == TXPWR_PG_WITH_TSSI_OFFSET ? _TRUE : _FALSE);
-#ifdef CONFIG_RTW_NBI
-	odm_cmn_info_init (p_dm_odm, ODM_CMNINFO_EN_NBI_DETECT, _TRUE);
-#endif
 }
 
 void rtl8822c_phy_init_dm_priv(PADAPTER adapter)
@@ -1026,13 +1024,15 @@ void rtl8822c_switch_chnl_and_set_bw(PADAPTER adapter)
 					&& mlmeext_scan_state(mlmeext) != SCAN_BACKING_OP)
 				drv_switch = _FALSE;
 		}
+	#else
+		u8 drv_switch = _FALSE;
+	#endif
+
 		if (drv_switch == _TRUE)
 			switch_chnl_and_set_bw_by_drv(adapter, switch_band);
 		else
-			switch_chnl_and_set_bw_by_fw(adapter, switch_band);
-	#else
 		switch_chnl_and_set_bw_by_fw(adapter, switch_band);
-	#endif
+
 	} else {
 		switch_chnl_and_set_bw_by_drv(adapter, switch_band);
 	}

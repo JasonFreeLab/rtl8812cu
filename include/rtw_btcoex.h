@@ -17,7 +17,7 @@
 #ifndef __RTW_BTCOEX_H__
 #define __RTW_BTCOEX_H__
 
-/* #include <drv_types.h> */
+#include <drv_types.h>
 
 /* For H2C: H2C_BT_MP_OPER. Return status definition to the user layer */
 typedef enum _BT_CTRL_STATUS {

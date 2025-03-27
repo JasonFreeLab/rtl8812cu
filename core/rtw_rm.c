@@ -310,17 +310,17 @@ int issue_null_reply(struct rm_obj *prm)
 	struct xmit_priv *pxmitpriv = &(padapter->xmitpriv);
 
 
-	m_mode = prm->p.m_mode;
-	if (m_mode || prm->p.rpt == 0) {
+	m_mode = prm->q.m_mode;
+	if (m_mode || prm->q.rpt == 0) {
 		RTW_INFO("RM: rmid=%x reply (%s repeat=%d)\n",
 			prm->rmid,
 			m_mode&MEAS_REP_MOD_INCAP?"INCAP":
 			m_mode&MEAS_REP_MOD_REFUSE?"REFUSE":
 			m_mode&MEAS_REP_MOD_LATE?"LATE":"no content",
-			prm->p.rpt);
+			prm->q.rpt);
 	}
 
-	switch (prm->p.action_code) {
+	switch (prm->q.action_code) {
 	case RM_ACT_RADIO_MEAS_REQ:
 		len = 8;
 		break;
@@ -618,7 +618,7 @@ static int rm_parse_bcn_req_s_elem(struct rm_obj *prm, u8 *pbody, int req_len)
 #if (RM_MORE_DBG_MSG)
 			RTW_INFO("RM: bcn_req_ap_ch_rep\n");
 #endif
-			if (ap_ch_rpt_idx >= BCN_REQ_OPT_AP_CH_RPT_MAX_NUM) {
+			if (ap_ch_rpt_idx > BCN_REQ_OPT_AP_CH_RPT_MAX_NUM) {
 				RTW_ERR("RM: bcn_req_ap_ch_rep over size\n");
 				break;
 			}
@@ -846,7 +846,9 @@ int rm_recv_radio_mens_rep(_adapter *padapter,
 	prm = rm_get_rmobj(padapter, rmid);
 	if (prm == NULL) {
 		/* not belong to us, report to upper */
+#ifdef CONFIG_IOCTL_CFG80211
 		rtw_cfg80211_rx_rrm_action(psta->padapter, precv_frame);
+#endif
 		return _TRUE;
 	}
 
@@ -958,7 +960,9 @@ int rm_recv_link_mens_rep(_adapter *padapter,
 	prm = rm_get_rmobj(padapter, rmid);
 	if (prm == NULL) {
 		/* not belong to us, report to upper */
+#ifdef CONFIG_IOCTL_CFG80211
 		rtw_cfg80211_rx_rrm_action(psta->padapter, precv_frame);
+#endif
 		return _TRUE;
 	}
 
@@ -1004,7 +1008,9 @@ int rm_radio_mens_nb_rep(_adapter *padapter,
 
 	if (prm == NULL) {
 		/* not belong to us, report to upper */
+#ifdef CONFIG_IOCTL_CFG80211
 		rtw_cfg80211_rx_rrm_action(psta->padapter, precv_frame);
+#endif
 		return _TRUE;
 	}
 
@@ -1028,8 +1034,9 @@ int rm_radio_mens_nb_rep(_adapter *padapter,
 			,_FALSE) == _FAIL)
 		return _FALSE;
 #endif
+#ifdef CONFIG_IOCTL_CFG80211
 	rtw_cfg80211_rx_rrm_action(padapter, precv_frame);
-
+#endif
 	return _TRUE;
 }
 

@@ -379,7 +379,7 @@ void rtl8192e_cal_txdesc_chksum(u8 *ptxdesc);
 	void	rtl8192ee_xmitframe_resume(_adapter *padapter);
 	s32 rtl8192ee_hal_xmit(PADAPTER padapter, struct xmit_frame *pxmitframe);
 	s32 rtl8192ee_mgnt_xmit(PADAPTER padapter, struct xmit_frame *pmgntframe);
-	void rtl8192ee_xmit_tasklet(void *priv);
+	void rtl8192ee_xmit_tasklet(unsigned long priv);
 #endif
 
 #if defined(CONFIG_SDIO_HCI) || defined(CONFIG_GSPI_HCI)

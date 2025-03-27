@@ -80,7 +80,7 @@ _iqk_check_cal_8822c(
 	return false;
 }
 
-void _iqk_idft(struct dm_struct *dm)
+void _iqk_idft_8822c(struct dm_struct *dm)
 {
 
 	odm_write_4byte(dm, 0x1b00, 0x8);
@@ -3609,8 +3609,8 @@ _iqk_rx_iqk_gain_search_fail_8822c(
 		
 		if (iqk->isbnd)
 			fail = false;
-		
-		iqk->tmp1bcc = IQMUX[idx];
+		if(idx < 5)
+			iqk->tmp1bcc = IQMUX[idx];
 
 		if (fail == false){
 			tmp = (iqk->tmp1bcc << 8) |  bb_idx ;
@@ -4188,7 +4188,7 @@ void _iqk_iqk_by_path_8822c(
 	case 6: /*IDFT*/
 #if 0
 		RF_DBG(dm, DBG_RF_IQK, "[CC]IDFT\n");
-		_iqk_idft(dm);
+		_iqk_idft_8822c(dm);
 		iqk_info->iqk_step++;
 #else
 				iqk_info->iqk_step++;
@@ -4250,7 +4250,7 @@ void _iqk_iqk_by_path_8822c(
 
 }
 
-void _iqk_dpd_in_sel(
+void _iqk_dpd_in_sel_8822c(
 	struct dm_struct *dm,
 	u8 input)
 {
@@ -4555,7 +4555,7 @@ void _iqk_rximr_test_8822c(
 	boolean kfail;
 	u8 i, step, count, side;
 	u32 imr_result = 0, tone_index;
-	u32 temp = 0, temp1b38[2][15];
+	u32 temp = 0, temp1b38[2][15] = {0};
 	char *freq[15] = {"1.25MHz", "3.75MHz", "6.25MHz", "8.75MHz", "11.25MHz",
 			  "13.75MHz", "16.25MHz", "18.75MHz", "21.25MHz", "23.75MHz",
 			  "26.25MHz", "28.75MHz", "31.25MHz", "33.75MHz", "36.25MHz"};

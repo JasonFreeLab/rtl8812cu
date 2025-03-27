@@ -299,6 +299,10 @@ void phydm_write_dig_reg_jgr3(void *dm_void, u8 igi)
 
 	odm_set_bb_reg(dm, R_0x1d70, ODM_BIT_IGI_11AC, igi);
 
+	/* Set GNT_BT_TX IGI value */
+	if (dm->support_ic_type & ODM_RTL8723F)
+		odm_set_bb_reg(dm, R_0x1968, 0xFE, MIN_2(igi,DIG_MAX_OF_MIN_PERFORMANCE_MODE));
+
 	#if (defined(PHYDM_COMPILE_ABOVE_2SS))
 	if (dm->support_ic_type & PHYDM_IC_ABOVE_2SS)
 		odm_set_bb_reg(dm, R_0x1d70, ODM_BIT_IGI_B_11AC3, igi);

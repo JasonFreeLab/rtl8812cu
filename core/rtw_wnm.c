@@ -321,11 +321,8 @@ u8 rtw_wnm_try_btm_roam_imnt(_adapter *padapter)
 	} else if (!pnb->disassoc_waiting) {
 		RTW_WNM_INFO("%s : waiting for btm roaming start/finish\n",
 				__func__);
-	}
-#if 0 /* Execution cannot reach this statement: "reason = 1;". */
-	 else
+	} else
 		reason = 1;
-#endif
 
 	return reason;
 }
@@ -366,7 +363,6 @@ void rtw_wnm_process_btm_req(_adapter *padapter, u8* pframe, u32 frame_len)
 			"(reason=%u)\n", __func__, reason);
 		reason = 0;
 		pnb->preference_en = _TRUE;
-		pnb->nb_rpt_valid = _FALSE;
 	}
 #endif
 

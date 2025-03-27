@@ -2971,6 +2971,11 @@ void odm_cmn_info_init(struct dm_struct *dm, enum odm_cmninfo cmn_info,
 		dm->peak_detect_mode = (u8)value;
 		break;
 #endif
+#if (RTL8822C_SUPPORT)
+	case ODM_CMNINFO_HW_SPECIAL_TYPE:
+		dm->hw_special_type = (u8)value;
+		break;
+#endif
 	default:
 		break;
 	}

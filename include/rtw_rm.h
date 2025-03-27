@@ -20,7 +20,7 @@ u8 rm_post_event_hdl(_adapter *padapter, u8 *pbuf);
 
 #define RM_TIMER_NUM 		32
 #define RM_ALL_MEAS		BIT(1)
-#define RM_ID_FOR_ALL(aid) (((u32)aid << 16) | RM_ALL_MEAS)
+#define RM_ID_FOR_ALL(aid)	((aid<<16)|RM_ALL_MEAS)
 
 #define RM_CAP_ARG(x) ((u8 *)(x))[4], ((u8 *)(x))[3], ((u8 *)(x))[2], ((u8 *)(x))[1], ((u8 *)(x))[0]
 #define RM_CAP_FMT "%02x %02x%02x %02x%02x"

@@ -500,9 +500,6 @@ void rtw_mbo_build_extended_cap(
 {
 	struct mlme_priv *pmlmepriv = &(padapter->mlmepriv);
 
-	if (!rtw_mbo_wifi_logo_test(padapter))
-		return;
-
 	rtw_wnm_add_btm_ext_cap(pmlmepriv->ext_capab_ie_data,
 				&(pmlmepriv->ext_capab_ie_len));
 	rtw_mbo_add_internw_ext_cap(pmlmepriv->ext_capab_ie_data,

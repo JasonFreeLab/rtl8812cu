@@ -186,7 +186,7 @@
 #define DPK_VER_8710B "NONE"
 #define DPK_VER_8723D "NONE"
 #define DPK_VER_8822B "NONE"
-#define DPK_VER_8822C "0x20"
+#define DPK_VER_8822C "0x21"
 #define DPK_VER_8821C "NONE"
 #define DPK_VER_8192F "0x13"
 #define DPK_VER_8198F "0x0e"
@@ -196,7 +196,7 @@
 #define DPK_VER_8197G "0x0b"
 #define DPK_VER_8814C "0x01"
 #define DPK_VER_8735B "0x0b"
-#define DPK_VER_8822E "0x0e"
+#define DPK_VER_8822E "0x0f"
 
 /*RFK_INIT version*/
 #define RFK_INIT_VER_8822B "0x8"

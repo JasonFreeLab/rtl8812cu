@@ -752,7 +752,7 @@ void rtw_process_vht_op_mode_notify(_adapter *padapter, u8 *pframe, void *sta)
 	}
 
 	if (update_ra)
-		rtw_dm_ra_mask_wk_cmd(padapter, (u8 *)psta);
+		rtw_dm_ra_mask_wk_cmd(padapter, psta);
 }
 
 u32	rtw_build_vht_operation_ie(_adapter *padapter, u8 *pbuf, u8 channel)
@@ -996,7 +996,7 @@ u32	rtw_build_vht_cap_ie(_adapter *padapter, u8 *pbuf)
 	return len;
 }
 
-u32 rtw_restructure_vht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, uint in_len, uint *pout_len, u8 channel, struct country_chplan *req_chplan)
+u32 rtw_restructure_vht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, uint in_len, uint *pout_len, u8 channel)
 {
 	u32	ielen;
 	u8 max_bw;
@@ -1065,7 +1065,7 @@ u32 rtw_restructure_vht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, uint in_le
 	}
 
 	/* try downgrage bw to fit in channel plan setting */
-	oper_bw = adapter_adjust_linking_bw_by_regd(padapter, band, oper_ch, oper_bw, oper_offset, req_chplan);
+	oper_bw = adapter_adjust_linking_bw_by_regd(padapter, band, oper_ch, oper_bw, oper_offset);
 	if (oper_bw == CHANNEL_WIDTH_20)
 		oper_offset = HAL_PRIME_CHNL_OFFSET_DONT_CARE;
 
@@ -1159,13 +1159,8 @@ void rtw_vht_ies_detach(_adapter *padapter, WLAN_BSSID_EX *pnetwork)
 	struct mlme_priv *pmlmepriv = &(padapter->mlmepriv);
 
 	rtw_remove_ext_cap_info(pmlmepriv->ext_capab_ie_data, &(pmlmepriv->ext_capab_ie_len), OP_MODE_NOTIFICATION);
-	if (pnetwork->IELength + 4 <= MAX_IE_SZ)
-		rtw_update_ext_cap_ie(pmlmepriv->ext_capab_ie_data,
-				      pmlmepriv->ext_capab_ie_len,
-				      pnetwork->IEs, &(pnetwork->IELength),
-				      _BEACON_IE_OFFSET_);
-	else
-		rtw_warn_on(1);
+	rtw_update_ext_cap_ie(pmlmepriv->ext_capab_ie_data, pmlmepriv->ext_capab_ie_len, pnetwork->IEs \
+		, &(pnetwork->IELength), _BEACON_IE_OFFSET_);
 
 	rtw_remove_bcn_ie(padapter, pnetwork, EID_VHTCapability);
 	rtw_remove_bcn_ie(padapter, pnetwork, EID_VHTOperation);
@@ -1242,8 +1237,7 @@ void rtw_check_vht_ies(_adapter *padapter, WLAN_BSSID_EX *pnetwork)
 	vht_cap_ie = rtw_get_ie(ies, EID_VHTCapability, &ie_len, ies_len);
 	vht_op_ie = rtw_get_ie(ies, EID_VHTOperation, &ie_len, ies_len);
 
-	if (vht_cap_ie != NULL)
-		rtw_update_drv_vht_cap(padapter, vht_cap_ie);
+	rtw_update_drv_vht_cap(padapter, vht_cap_ie);
 	rtw_set_vht_ext_cap(padapter, pnetwork);
 
 	/* Backup these two VHT IEs from hostapd/wpa_supplicant for restore usage */

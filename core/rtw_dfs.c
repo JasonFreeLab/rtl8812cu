@@ -79,6 +79,38 @@ bool rtw_chset_is_dfs_bchbw(const struct rtw_chset *chset, enum band_type band, 
 	return rtw_chset_is_dfs_range(chset, hi, lo);
 }
 
+#if CONFIG_DFS && CONFIG_IEEE80211_BAND_5GHZ
+static bool rtw_chset_get_dfs_frange(const struct rtw_chset *chset
+	, enum band_type band, u8 ch, u8 bw, u8 offset, u32 *dfs_freq_hi, u32 *dfs_freq_lo)
+{
+	u32 hi, lo;
+	u32 freq;
+	int i;
+
+	*dfs_freq_hi = *dfs_freq_lo = 0;
+
+	if (!rtw_bchbw_to_freq_range(band, ch, bw, offset, &hi, &lo)) {
+		rtw_warn_on(1);
+		return false;
+	}
+
+	for (i = 0; i < chset->chs_len; i++){
+		if (!(chset->chs[i].flags & RTW_CHF_DFS))
+			continue;
+		freq = rtw_bch2freq(chset->chs[i].band, chset->chs[i].ChannelNum);
+		if (!freq) {
+			rtw_warn_on(1);
+			continue;
+		}
+		if (!rtw_is_range_a_in_b(freq + 10, freq - 10, hi, lo))
+			continue;
+		rtw_range_merge(*dfs_freq_hi, *dfs_freq_lo, freq + 10, freq - 10);
+	}
+
+	return *dfs_freq_hi != 0;
+}
+#endif /* CONFIG_DFS && CONFIG_IEEE80211_BAND_5GHZ */
+
 enum rtw_dfs_regd rtw_rfctl_get_dfs_domain(struct rf_ctl_t *rfctl)
 {
 #ifdef CONFIG_DFS_MASTER
@@ -104,9 +136,9 @@ bool rtw_rfctl_radar_detect_supported(struct rf_ctl_t *rfctl)
 bool rtw_rfctl_overlap_radar_detect_ch(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset)
 {
 	bool ret = false;
+	u8 rd_hwband;
 	u32 hi = 0, lo = 0;
 	u32 r_hi = 0, r_lo = 0;
-	int i;
 
 	if (band != BAND_ON_5G || !rfctl->radar_detect_enabled)
 		goto exit;
@@ -116,14 +148,8 @@ bool rtw_rfctl_overlap_radar_detect_ch(struct rf_ctl_t *rfctl, enum band_type ba
 		goto exit;
 	}
 
-	if (rtw_bchbw_to_freq_range(band, rfctl->radar_detect_ch
-			, rfctl->radar_detect_bw, rfctl->radar_detect_offset
-			, &r_hi, &r_lo) == _FALSE) {
-		rtw_warn_on(1);
-		goto exit;
-	}
-
-	if (rtw_is_range_overlap(hi, lo, r_hi, r_lo))
+	rd_hwband = rfctl->radar_detect_hwband;
+	if (rtw_is_range_overlap(hi, lo, rfctl->radar_detect_freq_hi[rd_hwband], rfctl->radar_detect_freq_lo[rd_hwband]))
 		ret = true;
 
 exit:
@@ -166,6 +192,108 @@ bool alink_is_tx_blocked_by_ch_waiting(struct _ADAPTER_LINK *alink)
 	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
 
 	return rtw_rfctl_hwband_is_tx_blocked_by_ch_waiting(rfctl, ALINK_GET_HWBAND(alink));
+}
+
+/**
+ * rtw_chset_update_cac_state_of_chs - update cac_done according to the given @band, @chs, @chs_len into @chset
+ * @chset: the given channel set
+ * @band: band of setting range
+ * @chs: channel array of setting range
+ * @chs_len: channel array length
+ * @done: if CAC done
+ */
+static void rtw_chset_update_cac_state_of_chs(struct rtw_chset *chset
+	, u8 chs[], u8 chs_len, bool done)
+{
+	int i, j;
+
+	for (i = 0; i < chset->chs_len; i++) {
+		if (chset->chs[i].band != BAND_ON_5G)
+			continue;
+		for (j = 0; j < chs_len; j++) {
+			if (chs[j] == 0)
+				continue;
+			if (chset->chs[i].ChannelNum == chs[j])
+				chset->chs[i].cac_done = done;
+		}
+	}
+}
+
+/**
+ * rtw_chset_update_cac_state_by_freq - update cac_done according to the given @hi, @lo frequency into @chset
+ * @chset: the given channel set
+ * @hi: high frequency of setting range
+ * @lo: low frequency of setting range
+ * @done: if CAC done
+ */
+static void rtw_chset_update_cac_state_by_freq(struct rtw_chset *chset, u32 hi, u32 lo, bool done)
+{
+	enum band_type band;
+	int i;
+
+	band = rtw_freq2band(hi);
+
+	for (i = 0; i < chset->chs_len; i++) {
+		if (chset->chs[i].band != band)
+			continue;
+		if (!rtw_bch2freq(band, chset->chs[i].ChannelNum)) {
+			rtw_warn_on(1);
+			continue;
+		}
+
+		if (lo <= rtw_bch2freq(band, chset->chs[i].ChannelNum)
+			&& rtw_bch2freq(band, chset->chs[i].ChannelNum) <= hi)
+			chset->chs[i].cac_done = done;
+	}
+}
+
+static void rtw_chset_update_cac_state_by_cch(struct rtw_chset *chset, u8 cch, u8 bw, bool done)
+{
+	u32 hi, lo;
+
+	if (rtw_bcchbw_to_freq_range(BAND_ON_5G, cch, bw, &hi, &lo))
+		rtw_chset_update_cac_state_by_freq(chset, hi, lo, done);
+}
+
+/**
+ * rtw_chset_is_frange_require_cac - check cac_done according to the given @hi, @lo frequency into @chset
+ * @chset: the given channel set
+ * @hi: high frequency of checking range
+ * @lo: low frequency of checking range
+ * return: if all channel inside range require CAC (DFS channel and not CAC done)
+ */
+static bool rtw_chset_is_frange_require_cac(struct rtw_chset *chset, u32 hi, u32 lo)
+{
+	enum band_type band;
+	int i;
+
+	band = rtw_freq2band(hi);
+
+	for (i = 0; i < chset->chs_len; i++) {
+		if (chset->chs[i].band != band)
+			continue;
+		if (!(chset->chs[i].flags & RTW_CHF_DFS))
+			continue;
+		if (!rtw_bch2freq(band, chset->chs[i].ChannelNum)) {
+			rtw_warn_on(1);
+			continue;
+		}
+		if (lo <= rtw_bch2freq(band, chset->chs[i].ChannelNum)
+			&& rtw_bch2freq(band, chset->chs[i].ChannelNum) <= hi
+			&& !chset->chs[i].cac_done)
+			return true;
+	}
+
+	return false;
+}
+
+static bool rtw_chset_is_cch_require_cac(struct rtw_chset *chset, u8 cch, u8 bw)
+{
+	u32 hi, lo;
+
+	if (rtw_bcchbw_to_freq_range(BAND_ON_5G, cch, bw, &hi, &lo))
+		return rtw_chset_is_frange_require_cac(chset, hi, lo);
+	return false;
 }
 
 bool rtw_chset_is_bchbw_non_ocp(const struct rtw_chset *chset, enum band_type band, u8 ch, u8 bw, u8 offset)
@@ -301,7 +429,7 @@ static bool rtw_chset_update_non_ocp_ms_by_band_cch(struct rtw_chset *chset, enu
 	return rtw_chset_update_non_ocp_ms_by_freq(chset, hi, lo, ms);
 }
 
-bool rtw_chset_update_non_ocp_ms_by_band(struct rtw_chset *chset, enum band_type band, u8 ch, u8 bw, u8 offset, int ms)
+static bool rtw_chset_update_non_ocp_ms_by_band(struct rtw_chset *chset, enum band_type band, u8 ch, u8 bw, u8 offset, int ms)
 {
 	u32 hi, lo;
 
@@ -344,7 +472,7 @@ static bool rtw_rfctl_chset_chk_non_ocp_finish_for_bchbw(struct rf_ctl_t *rfctl,
 			chinfo->non_ocp_end_time = RTW_NON_OCP_STOPPED;
 		}
 		for (i = HW_BAND_0; i < HW_BAND_MAX; i++) /* single chset shared by all hwband */
-			rtw_nlrtw_nop_finish_event(rfctl, i, band, cch, bw);
+			rtw_os_indicate_nop_finished(rfctl, i, band, cch, bw);
 	}
 
 exit:
@@ -376,38 +504,45 @@ void rtw_rfctl_chset_chk_non_ocp_finish(struct rf_ctl_t *rfctl)
 	}
 }
 
-u32 rtw_get_ch_waiting_ms(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset, u32 *r_non_ocp_ms, u32 *r_cac_ms)
+/*
+* For ioctl debug usage, will not change current CAC status
+* Don't use on current operating channels
+*/
+void rtw_rfctl_force_update_non_ocp_ms(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset, int ms)
+{
+	struct rtw_chset *chset = &rfctl->chset;
+	bool updated;
+
+	if (bw == CHANNEL_WIDTH_20)
+		updated = rtw_chset_update_non_ocp_ms_by_band(chset
+			, band, ch, bw, CHAN_OFFSET_NO_EXT, ms);
+	else
+		updated = rtw_chset_update_non_ocp_ms_by_band(chset
+			, band, ch, bw, offset, ms);
+
+	if (updated) {
+		u8 i;
+		u8 cch = rtw_get_center_ch_by_band(band, ch, bw, offset);
+
+		for (i = HW_BAND_0; i < HW_BAND_MAX; i++)
+			rtw_os_indicate_nop_started(rfctl, i, band, cch, bw, false);
+	}
+}
+
+static u32 _rtw_get_ch_waiting_ms(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset, bool in_self_rd_range, u32 *r_non_ocp_ms, u32 *r_cac_ms)
 {
 	struct rtw_chset *chset = &rfctl->chset;
 	u32 non_ocp_ms;
 	u32 cac_ms;
-	u8 in_rd_range = 0; /* if in current radar detection range*/
 
 	if (rtw_chset_is_bchbw_non_ocp(chset, band, ch, bw, offset))
 		non_ocp_ms = rtw_chset_get_bch_non_ocp_ms(chset, band, ch, bw, offset);
 	else
 		non_ocp_ms = 0;
 
-	if (rfctl->radar_detect_enabled) {
-		u32 cur_hi, cur_lo, hi, lo;
-
-		if (rtw_bchbw_to_freq_range(band, ch, bw, offset, &hi, &lo) == _FALSE) {
-			RTW_ERR("input range band:%u, ch:%u, bw:%u, offset:%u\n", band, ch, bw, offset);
-			rtw_warn_on(1);
-		}
-
-		if (rtw_bchbw_to_freq_range(BAND_ON_5G, rfctl->radar_detect_ch, rfctl->radar_detect_bw, rfctl->radar_detect_offset, &cur_hi, &cur_lo) == _FALSE) {
-			RTW_ERR("cur detection range band:%u, ch:%u, bw:%u, offset:%u\n", BAND_ON_5G, rfctl->radar_detect_ch, rfctl->radar_detect_bw, rfctl->radar_detect_offset);
-			rtw_warn_on(1);
-		}
-
-		if (rtw_is_range_a_in_b(hi, lo, cur_hi, cur_lo))
-			in_rd_range = 1;
-	}
-
 	if (!rtw_chset_is_dfs_bchbw(chset, band, ch, bw, offset))
 		cac_ms = 0;
-	else if (in_rd_range && !non_ocp_ms) {
+	else if (in_self_rd_range && !non_ocp_ms) {
 		if (IS_CH_WAITING(rfctl))
 			cac_ms = rtw_systime_to_ms(rfctl->cac_end_time - rtw_get_current_time());
 		else
@@ -425,83 +560,35 @@ u32 rtw_get_ch_waiting_ms(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8
 	return non_ocp_ms + cac_ms;
 }
 
-/*
-* called in rtw_dfs_rd_enable()
-* assume the request channel coverage is DFS range
-* base on the current status and the request channel coverage to check if need to reset complete CAC time
-*/
-static bool rtw_is_cac_reset_needed(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 offset)
+u32 rtw_get_ch_waiting_ms(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset, u32 *r_non_ocp_ms, u32 *r_cac_ms)
 {
-	bool needed = _FALSE;
-	u32 cur_hi, cur_lo, hi, lo;
+	bool in_self_rd_range = false;
 
-	if (rfctl->radar_detected == 1) {
-		needed = _TRUE;
-		goto exit;
+	if (rfctl->radar_detect_enabled) {
+		u32 hi, lo;
+		u8 rd_hwband = rfctl->radar_detect_hwband;
+
+		if (rtw_chset_get_dfs_frange(&rfctl->chset, band, ch, bw, offset, &hi, &lo)
+			&& rtw_is_range_a_in_b(hi, lo, rfctl->radar_detect_freq_hi[rd_hwband], rfctl->radar_detect_freq_lo[rd_hwband]))
+			in_self_rd_range = 1;
 	}
 
-	if (rfctl->radar_detect_ch == 0) {
-		needed = _TRUE;
-		goto exit;
-	}
-
-	if (rtw_bchbw_to_freq_range(BAND_ON_5G, ch, bw, offset, &hi, &lo) == _FALSE) {
-		RTW_ERR("request detection range ch:%u, bw:%u, offset:%u\n", ch, bw, offset);
-		rtw_warn_on(1);
-	}
-
-	if (rtw_bchbw_to_freq_range(BAND_ON_5G, rfctl->radar_detect_ch, rfctl->radar_detect_bw, rfctl->radar_detect_offset, &cur_hi, &cur_lo) == _FALSE) {
-		RTW_ERR("cur detection range ch:%u, bw:%u, offset:%u\n", rfctl->radar_detect_ch, rfctl->radar_detect_bw, rfctl->radar_detect_offset);
-		rtw_warn_on(1);
-	}
-
-	if (hi <= lo || cur_hi <= cur_lo) {
-		RTW_ERR("hi:%u, lo:%u, cur_hi:%u, cur_lo:%u\n", hi, lo, cur_hi, cur_lo);
-		rtw_warn_on(1);
-	}
-
-	if (rtw_is_range_a_in_b(hi, lo, cur_hi, cur_lo)) {
-		/* request is in current detect range */
-		goto exit;
-	}
-
-	/* check if request channel coverage has new range and the new range is in DFS range */
-	if (!rtw_is_range_overlap(hi, lo, cur_hi, cur_lo)) {
-		/* request has no overlap with current */
-		needed = _TRUE;
-	} else if (rtw_is_range_a_in_b(cur_hi, cur_lo, hi, lo)) {
-		/* request is supper set of current */
-		if ((hi != cur_hi && rtw_chset_is_dfs_range(&rfctl->chset, hi, cur_hi))
-			|| (lo != cur_lo && rtw_chset_is_dfs_range(&rfctl->chset, cur_lo, lo)))
-			needed = _TRUE;
-	} else {
-		/* request is not supper set of current, but has overlap */
-		if ((lo < cur_lo && rtw_chset_is_dfs_range(&rfctl->chset, cur_lo, lo))
-			|| (hi > cur_hi && rtw_chset_is_dfs_range(&rfctl->chset, hi, cur_hi)))
-			needed = _TRUE;
-	}
-
-exit:
-	return needed;
+	return _rtw_get_ch_waiting_ms(rfctl, band, ch, bw, offset, in_self_rd_range, r_non_ocp_ms, r_cac_ms);
 }
 
-static void rtw_reset_cac(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 offset)
+static void rtw_reset_cac(struct rf_ctl_t *rfctl, u8 op_ch, u8 op_bw, u8 op_offset)
 {
 #define RD_CONFIG_INT_MS 2000
 	u32 non_ocp_ms;
 	u32 cac_ms;
 	u32 rd_ready_ms = 0;
 
-	rtw_get_ch_waiting_ms(rfctl, BAND_ON_5G
-		, ch
-		, bw
-		, offset
-		, &non_ocp_ms
-		, &cac_ms
-	);
+	_rtw_get_ch_waiting_ms(rfctl, BAND_ON_5G, op_ch, op_bw, op_offset, false
+		, &non_ocp_ms, &cac_ms);
 	if (non_ocp_ms < RD_CONFIG_INT_MS)
 		rd_ready_ms = RD_CONFIG_INT_MS - non_ocp_ms;
 
+	rfctl->non_ocp_finished = non_ocp_ms ? false : true;
 	rfctl->cac_start_time = rtw_get_current_time() + rtw_ms_to_systime(non_ocp_ms);
 	rfctl->cac_end_time = rfctl->cac_start_time + rtw_ms_to_systime(rd_ready_ms + cac_ms);
 
@@ -555,6 +642,11 @@ u8 rtw_dfs_rd_hdl(struct dvobj_priv *dvobj, enum phl_band_idx hwband, u8 radar_c
 	if (IS_CH_WAITING(rfctl) && !IS_UNDER_CAC(rfctl)) {
 		/* non_ocp, ignore radar detect */
 		goto cac_status_chk;
+	} else if (IS_UNDER_CAC(rfctl) && !rfctl->non_ocp_finished) {
+		/* from NON_OCP to CAC, indicate CAC started event */
+		rtw_os_indicate_cac_started(rfctl, hwband, 0xFF
+			, rfctl->radar_detect_cch[hwband], rfctl->radar_detect_bw[hwband]);
+		rfctl->non_ocp_finished = true;
 	}
 
 	detected = (radar_cch > 0 && radar_bw != CHANNEL_WIDTH_MAX) ? true : false;
@@ -575,8 +667,8 @@ u8 rtw_dfs_rd_hdl(struct dvobj_priv *dvobj, enum phl_band_idx hwband, u8 radar_c
 		rfctl->dbg_dfs_fake_radar_detect_cnt--;
 
 		/* TODO: fack radar detected with specific range */
-		radar_cch = rfctl->radar_detect_cch;
-		radar_bw = rfctl->radar_detect_bw;
+		radar_cch = rfctl->radar_detect_cch[hwband];
+		radar_bw = rfctl->radar_detect_bw[hwband];
 
 	} else
 		RTW_INFO(FUNC_HWBAND_FMT" radar detected\n", FUNC_HWBAND_ARG(hwband));
@@ -586,9 +678,8 @@ u8 rtw_dfs_rd_hdl(struct dvobj_priv *dvobj, enum phl_band_idx hwband, u8 radar_c
 	rtw_chset_update_non_ocp_ms_by_band_cch(&rfctl->chset, BAND_ON_5G
 		, radar_cch, radar_bw, -1);
 
-	if (IS_UNDER_CAC(rfctl))
-		rtw_nlrtw_cac_abort_event(rfctl, hwband, rfctl->radar_detect_cch, rfctl->radar_detect_bw);
-	rtw_nlrtw_radar_detect_event(rfctl, hwband, radar_cch, radar_bw);
+	rtw_os_indicate_radar_detected(rfctl, hwband, radar_cch, radar_bw);
+	rtw_os_indicate_nop_started(rfctl, hwband, BAND_ON_5G, radar_cch, radar_bw, true);
 
 	rtw_dfs_ch_switch_hdl(dvobj);
 
@@ -606,6 +697,8 @@ cac_status_chk:
 		_adapter *m_iface;
 
 		rfctl->cac_start_time = rfctl->cac_end_time = RTW_CAC_STOPPED;
+		rtw_chset_update_cac_state_by_cch(&rfctl->chset
+			, rfctl->radar_detect_cch[hwband], rfctl->radar_detect_bw[hwband], true);
 		rtw_dfs_hal_set_cac_status(dvobj, hwband, false);
 
 		m_iface = rtw_mi_get_ap_mesh_iface_by_hwband(dvobj, hwband);
@@ -624,7 +717,8 @@ cac_status_chk:
 		} else
 			RTW_ERR(FUNC_HWBAND_FMT" can't get ap/mesh iface\n", FUNC_HWBAND_ARG(hwband));
 
-		rtw_nlrtw_cac_finish_event(rfctl, hwband, rfctl->radar_detect_cch, rfctl->radar_detect_bw);
+		rtw_os_indicate_cac_finished(rfctl, hwband, 0xFF
+			, rfctl->radar_detect_cch[hwband], rfctl->radar_detect_bw[hwband]);
 	}
 
 set_timer:
@@ -673,12 +767,215 @@ static void rtw_dfs_rd_timer_hdl(void *ctx)
 
 	rtw_dfs_rd_cmd(dvobj, rfctl->radar_detect_hwband);
 }
+#endif /* CONFIG_DFS_MASTER */
 
-static void rtw_dfs_rd_enable(struct rf_ctl_t *rfctl, u8 band_idx, u8 ch, u8 bw, u8 offset, bool bypass_cac)
+#if CONFIG_DFS && CONFIG_IEEE80211_BAND_5GHZ
+static void rtw_dfs_update_rd_range_status(struct rf_ctl_t *rfctl, u8 band_idx
+	, u8 op_ch, enum channel_width op_bw, enum chan_offset op_offset, u32 rd_freq_hi, u32 rd_freq_lo, bool by_others)
 {
+#define RD_RANGE_OPCH_NUM_MAX (160 / 20)
+#ifdef CONFIG_DFS_MASTER
+	bool new_self_rd_ch = false;
+	bool cover_non_ocp = op_ch && rtw_chset_is_bchbw_non_ocp(&rfctl->chset, BAND_ON_5G, op_ch, op_bw, op_offset);
+#endif
+	u8 cch = 0;
+	enum channel_width bw = CHANNEL_WIDTH_MAX;
+
+#ifndef CONFIG_DFS_MASTER
+	if (rd_freq_hi && !by_others) {
+		rtw_warn_on(1);
+		rd_freq_hi = 0;
+	}
+#endif
+
+	if (rd_freq_hi) {
+		cch = rtw_freq2ch((rd_freq_hi + rd_freq_lo) / 2);
+		bw = rtw_frange_to_bw(rd_freq_hi, rd_freq_lo);
+		rtw_warn_on(cch == 0);
+		rtw_warn_on(bw == CHANNEL_WIDTH_MAX);
+	}
+
+#ifdef CONFIG_DFS_MASTER
+	if (rfctl->radar_detect_cch[band_idx] != cch
+		|| rfctl->radar_detect_bw[band_idx] != bw
+	) {
+		/* coverage range changed */
+		u8 *op_chs;
+		u8 op_ch_num;
+		u8 rd_cch;
+		enum channel_width rd_bw;
+		u8 i, j, k;
+
+		if (rfctl->radar_detect_cch[band_idx]) {
+			u8 clr_chs[RD_RANGE_OPCH_NUM_MAX];
+
+			/* init clr_chs from original coverage of this hwband */
+			if (!rtw_get_op_chs_by_bcch_bw(BAND_ON_5G
+				, rfctl->radar_detect_cch[band_idx], rfctl->radar_detect_bw[band_idx], &op_chs, &op_ch_num)
+			) {
+				RTW_WARN(FUNC_HWBAND_FMT" rtw_get_op_chs_by_bcch_bw() fail on cch:%u bw:%u\n", FUNC_HWBAND_ARG(band_idx)
+					, rfctl->radar_detect_cch[band_idx], rfctl->radar_detect_bw[band_idx]);
+				rtw_warn_on(1);
+				goto handle_add_chs;
+			}
+			_rtw_memset(clr_chs, 0, RD_RANGE_OPCH_NUM_MAX);
+			for (i = 0; i < op_ch_num; i++)
+				clr_chs[i] = op_chs[i];
+
+			/* remove op chs of new coverages from clr_chs */
+			for (i = HW_BAND_0; i < HW_BAND_MAX; i++) {
+				if (i == band_idx && cch) {
+					rd_cch = cch;
+					rd_bw = bw;
+				} else if (i != band_idx && rfctl->radar_detect_cch[i]) {
+					rd_cch = rfctl->radar_detect_cch[i];
+					rd_bw = rfctl->radar_detect_bw[i];
+				} else
+					continue;
+
+				if (!rtw_get_op_chs_by_bcch_bw(BAND_ON_5G, rd_cch, rd_bw, &op_chs, &op_ch_num)) {
+					RTW_WARN(FUNC_HWBAND_FMT" rtw_get_op_chs_by_bcch_bw() fail on cch:%u bw:%u\n"
+						, FUNC_HWBAND_ARG(i), rd_cch, rd_bw);
+					rtw_warn_on(1);
+					continue;
+				}
+				for (j = 0; j < RD_RANGE_OPCH_NUM_MAX; j++)
+					for (k = 0; k < op_ch_num; k++)
+						if (clr_chs[j] == op_chs[k])
+							clr_chs[j] = 0;
+			}
+
+			/* clear CAC_DONE of clr_chs */
+			rtw_chset_update_cac_state_of_chs(&rfctl->chset, clr_chs, RD_RANGE_OPCH_NUM_MAX, false);
+		}
+
+handle_add_chs:
+		if (cch && !by_others && !cover_non_ocp) {
+			u8 add_chs[RD_RANGE_OPCH_NUM_MAX];
+
+			/* init add_chs from new coverage of this hwband */
+			if (!rtw_get_op_chs_by_bcch_bw(BAND_ON_5G, cch, bw, &op_chs, &op_ch_num)) {
+				RTW_WARN(FUNC_HWBAND_FMT" rtw_get_op_chs_by_bcch_bw() fail on cch:%u bw:%u\n"
+					, FUNC_HWBAND_ARG(band_idx), cch, bw);
+				rtw_warn_on(1);
+				goto update_ch_cac;
+			}
+			_rtw_memset(add_chs, 0, RD_RANGE_OPCH_NUM_MAX);
+			for (i = 0; i < op_ch_num; i++)
+				add_chs[i] = op_chs[i];
+
+			/* remove op chs of original coverages from add_chs */
+			for (i = HW_BAND_0; i < HW_BAND_MAX; i++) {
+				if (rfctl->radar_detect_cch[i]) {
+					rd_cch = rfctl->radar_detect_cch[i];
+					rd_bw = rfctl->radar_detect_bw[i];
+				} else
+					continue;
+
+				if (!rtw_get_op_chs_by_bcch_bw(BAND_ON_5G, rd_cch, rd_bw, &op_chs, &op_ch_num)) {
+					RTW_WARN(FUNC_HWBAND_FMT" rtw_get_op_chs_by_bcch_bw() fail on cch:%u bw:%u\n"
+						, FUNC_HWBAND_ARG(i), rd_cch, rd_bw);
+					rtw_warn_on(1);
+					continue;
+				}
+				for (j = 0; j < RD_RANGE_OPCH_NUM_MAX; j++)
+					for (k = 0; k < op_ch_num; k++)
+						if (add_chs[j] == op_chs[k])
+							add_chs[j] = 0;
+			}
+
+			for (i = 0; i < RD_RANGE_OPCH_NUM_MAX; i++)
+				if (add_chs[i])
+					break;
+			if (i < RD_RANGE_OPCH_NUM_MAX)
+				new_self_rd_ch = true;
+		}
+	}
+
+update_ch_cac:
+	if (cch && by_others) {
+		/* new coverage of this hwband is detected by others, set CAC_DONE directly */
+		rtw_chset_update_cac_state_by_cch(&rfctl->chset, cch, bw, true);
+	}
+
+
+	/* hwband CAC status update */
+	if (cover_non_ocp) {
+		RTW_INFO(FUNC_HWBAND_FMT" cover NON_OCP channel\n", FUNC_HWBAND_ARG(band_idx));
+		if (IS_UNDER_CAC(rfctl)) {
+			RTW_INFO(FUNC_HWBAND_FMT" CAC abort\n", FUNC_HWBAND_ARG(band_idx));
+			rtw_os_indicate_cac_aborted(rfctl, band_idx, 0xFF
+				, rfctl->radar_detect_cch[band_idx], rfctl->radar_detect_bw[band_idx]);
+		}
+		rtw_reset_cac(rfctl, op_ch, op_bw, op_offset);
+
+	} else if (new_self_rd_ch) {
+		/* if having new rd chs and not detected by others, reset CAC of detecting hwband */
+		RTW_INFO(FUNC_HWBAND_FMT" have new detect range\n", FUNC_HWBAND_ARG(band_idx));
+		rtw_reset_cac(rfctl, op_ch, op_bw, op_offset);
+		rtw_os_indicate_cac_started(rfctl, band_idx, 0xFF, cch, bw);
+
+	} else {
+		u8 rd_cch;
+		enum channel_width rd_bw;
+		u8 i;
+		bool require_cac[HW_BAND_MAX];
+
+		if (IS_UNDER_CAC(rfctl) && cch == 0 && rfctl->radar_detect_cch[band_idx]
+			&& !rfctl->radar_detect_by_others[band_idx]
+		) {
+			/* from detecting by self to no detecting (by self/others), CAC abort  */
+			RTW_INFO(FUNC_HWBAND_FMT" disable detect, CAC abort\n", FUNC_HWBAND_ARG(band_idx));
+			rtw_os_indicate_cac_aborted(rfctl, band_idx, 0xFF
+				, rfctl->radar_detect_cch[band_idx], rfctl->radar_detect_bw[band_idx]);
+		}
+
+		for (i = HW_BAND_0; i < HW_BAND_MAX; i++) {
+			if (i == band_idx && cch) {
+				rd_cch = cch;
+				rd_bw = bw;
+			} else if (i != band_idx && rfctl->radar_detect_cch[i]) {
+				rd_cch = rfctl->radar_detect_cch[i];
+				rd_bw = rfctl->radar_detect_bw[i];
+			} else {
+				require_cac[i] = false;
+				continue;
+			}
+
+			require_cac[i] = rtw_chset_is_cch_require_cac(&rfctl->chset, rd_cch, rd_bw);
+			if (!require_cac[i]) {
+				if (IS_UNDER_CAC(rfctl))
+					RTW_INFO(FUNC_HWBAND_FMT" detect range already CAC done\n", FUNC_HWBAND_ARG(i));
+				/* if new coverage of detecting hwband CAC_DONE, force CAC finish */
+				rtw_os_force_cac_finished(rfctl, i, 0xFF, rd_cch, rd_bw);
+			}
+		}
+
+		if (!IS_CAC_STOPPED(rfctl)) {
+			/* set CAC stop if no hwband needed */
+			for (i = HW_BAND_0; i < HW_BAND_MAX; i++)
+				if (require_cac[i])
+					break;
+			if (i >= HW_BAND_MAX)
+				rfctl->cac_start_time = rfctl->cac_end_time = RTW_CAC_STOPPED;
+		}
+	}
+#endif /* CONFIG_DFS_MASTER */
+
+	rfctl->radar_detect_by_others[band_idx] = by_others;
+	rfctl->radar_detect_cch[band_idx] = cch;
+	rfctl->radar_detect_bw[band_idx] = bw;
+	rfctl->radar_detect_freq_hi[band_idx] = rd_freq_hi;
+	rfctl->radar_detect_freq_lo[band_idx] = rd_freq_lo;
+}
+
+static void rtw_dfs_rd_enable(struct rf_ctl_t *rfctl, u8 band_idx, u8 op_ch, u8 op_bw, u8 op_offset
+	, u32 rd_freq_hi, u32 rd_freq_lo, bool by_others)
+{
+#ifdef CONFIG_DFS_MASTER
 	struct dvobj_priv *dvobj = rfctl_to_dvobj(rfctl);
 
-	RTW_INFO(FUNC_HWBAND_FMT" on %u,%u,%u\n", FUNC_HWBAND_ARG(band_idx), ch, bw, offset);
+	RTW_INFO(FUNC_HWBAND_FMT" on %u,%u,%u\n", FUNC_HWBAND_ARG(band_idx), op_ch, op_bw, op_offset);
 
 	if (rfctl->radar_detect_enabled && rfctl->radar_detect_hwband != band_idx) {
 		RTW_WARN(FUNC_HWBAND_FMT" radar_detect has been enabled for "HWBAND_FMT"\n"
@@ -687,23 +984,9 @@ static void rtw_dfs_rd_enable(struct rf_ctl_t *rfctl, u8 band_idx, u8 ch, u8 bw,
 		return;
 	}
 
-	if (bypass_cac)
-		rfctl->cac_start_time = rfctl->cac_end_time = RTW_CAC_STOPPED;
-	else if (rtw_is_cac_reset_needed(rfctl, ch, bw, offset) == _TRUE)
-		rtw_reset_cac(rfctl, ch, bw, offset);
-
-	rfctl->radar_detect_by_others[band_idx] = false;
-
-	rfctl->radar_detect_hwband = band_idx;
-	rfctl->radar_detect_ch = ch;
-	rfctl->radar_detect_bw = bw;
-	rfctl->radar_detect_offset = offset;
-	rfctl->radar_detect_cch = rtw_get_center_ch_by_band(BAND_ON_5G, ch, bw, offset);
-
-	rfctl->radar_detected = 0;
-
 	if (!rfctl->radar_detect_enabled) {
 		RTW_INFO(FUNC_HWBAND_FMT" set radar_detect_enabled\n", FUNC_HWBAND_ARG(band_idx));
+		rfctl->radar_detect_hwband = band_idx;
 		rfctl->radar_detect_enabled = 1;
 		#ifdef CONFIG_LPS
 		LPS_Leave(dvobj_get_primary_adapter(dvobj), "RADAR_DETECT_EN");
@@ -711,66 +994,66 @@ static void rtw_dfs_rd_enable(struct rf_ctl_t *rfctl, u8 band_idx, u8 ch, u8 bw,
 		_set_timer(&rfctl->radar_detect_timer
 			, rtw_dfs_hal_radar_detect_polling_int_ms(dvobj));
 	}
+	rfctl->radar_detected = 0;
+
+	rtw_dfs_update_rd_range_status(rfctl, band_idx, op_ch, op_bw, op_offset
+		, rd_freq_hi, rd_freq_lo, by_others);
 
 	rtw_dfs_hal_update_region(dvobj, band_idx, rtw_rfctl_get_dfs_domain(rfctl));
-	rtw_dfs_hal_radar_detect_enable(dvobj, band_idx, IS_CH_WAITING(rfctl), ch, bw, offset);
+	rtw_dfs_hal_radar_detect_enable(dvobj, band_idx, IS_CH_WAITING(rfctl), rd_freq_hi, rd_freq_lo);
+#else
+	rtw_warn_on(1);
+#endif
 }
 
-static void rtw_dfs_rd_disable(struct rf_ctl_t *rfctl, u8 band_idx, u8 ch, u8 bw, u8 offset, bool by_others)
+static void rtw_dfs_rd_disable(struct rf_ctl_t *rfctl, u8 band_idx, u8 op_ch, u8 op_bw, u8 op_offset
+	, u32 rd_freq_hi, u32 rd_freq_lo, bool by_others)
 {
+#ifdef CONFIG_DFS_MASTER
 	struct dvobj_priv *dvobj = rfctl_to_dvobj(rfctl);
-
-	rfctl->radar_detect_by_others[band_idx] = by_others;
 
 	if (rfctl->radar_detect_hwband == band_idx) {
 		if (rfctl->radar_detect_enabled) {
 			RTW_INFO(FUNC_HWBAND_FMT" clear radar_detect_enabled\n", FUNC_HWBAND_ARG(band_idx));
-
 			rfctl->radar_detect_enabled = 0;
 			rfctl->radar_detected = 0;
-			rfctl->radar_detect_hwband = HW_BAND_MAX;
-			rfctl->radar_detect_ch = 0;
-			rfctl->radar_detect_bw = 0;
-			rfctl->radar_detect_offset = 0;
-			rfctl->radar_detect_cch = 0;
-			rfctl->cac_start_time = rfctl->cac_end_time = RTW_CAC_STOPPED;
 			_cancel_timer_ex(&rfctl->radar_detect_timer);
 		}
 
 		rtw_dfs_hal_radar_detect_disable(dvobj, band_idx);
 	}
+#endif
 
 	if (by_others) {
-		rfctl->radar_detect_ch = ch;
-		rfctl->radar_detect_bw = bw;
-		rfctl->radar_detect_offset = offset;
-		rfctl->radar_detect_cch = rtw_get_center_ch_by_band(BAND_ON_5G, ch, bw, offset);
-	} else {
-		rfctl->radar_detect_ch = 0;
-		rfctl->radar_detect_bw = 0;
-		rfctl->radar_detect_offset = 0;
-	}
+		rtw_dfs_update_rd_range_status(rfctl, band_idx, op_ch, op_bw, op_offset
+			, rd_freq_hi, rd_freq_lo, true);
+	} else
+		rtw_dfs_update_rd_range_status(rfctl, band_idx, 0, 0, 0, 0, 0, false);
 }
 
 static bool _rtw_dfs_rd_en_decision(struct rf_ctl_t *rfctl, struct mi_state *mstate
-	, enum band_type u_band, u8 u_ch, enum channel_width u_bw, enum chan_offset u_offset, bool *ld_sta_in_dfs)
+	, enum band_type u_band, u8 u_ch, enum channel_width u_bw, enum chan_offset u_offset
+	, u32 *rd_freq_hi, u32 *rd_freq_lo, bool *lgd_sta_in_dfs)
 {
+	bool overlap_dfs = u_ch ? rtw_chset_get_dfs_frange(&rfctl->chset, u_band, u_ch, u_bw, u_offset, rd_freq_hi, rd_freq_lo) : false;
 	bool needed = false;
 
 	if (MSTATE_STA_LG_NUM(mstate) > 0) {
 		/* STA mode is linking */
+		if (overlap_dfs)
+			*lgd_sta_in_dfs = true;
 		goto exit;
 	}
 
 	if (MSTATE_STA_LD_NUM(mstate) > 0) {
-		if (rtw_chset_is_dfs_bchbw(&rfctl->chset, u_band, u_ch, u_bw, u_offset)) {
+		if (overlap_dfs) {
 			/*
 			* if operate as slave w/o radar detect,
 			* rely on AP on which STA mode connects
 			*/
 			if (IS_DFS_SLAVE_WITH_RD(rfctl) && rtw_rfctl_radar_detect_supported(rfctl))
 				needed = true;
-			*ld_sta_in_dfs = true;
+			*lgd_sta_in_dfs = true;
 		}
 		goto exit;
 	}
@@ -780,7 +1063,7 @@ static bool _rtw_dfs_rd_en_decision(struct rf_ctl_t *rfctl, struct mi_state *mst
 		goto exit;
 	}
 
-	if (!rtw_chset_is_dfs_bchbw(&rfctl->chset, u_band, u_ch, u_bw, u_offset))
+	if (!overlap_dfs)
 		goto exit;
 
 	needed = true;
@@ -800,10 +1083,10 @@ static void rtw_dfs_rd_en_decision(struct dvobj_priv *dvobj, enum phl_band_idx h
 		u8 ifbmp;
 		enum band_type u_band;
 		u8 u_ch, u_bw, u_offset;
-		bool ld_sta_in_dfs;
+		u32 rd_freq_hi, rd_freq_lo;
+		bool lgd_sta_in_dfs;
 		bool needed;
 
-#if 0 /* Multi HW_BAND */
 		/* hwband < HW_BAND_MAX means specific hwband */
 		if (hwband < HW_BAND_MAX && hwband != band_idx)
 			continue;
@@ -811,9 +1094,9 @@ static void rtw_dfs_rd_en_decision(struct dvobj_priv *dvobj, enum phl_band_idx h
 		/* alink != NULL means specific hwband */
 		if (alink && band_idx != ALINK_GET_HWBAND(alink))
 			continue;
-#endif /* Multi HW_BAND */
 
-		ld_sta_in_dfs = false;
+		rd_freq_hi = rd_freq_lo = 0;
+		lgd_sta_in_dfs = false;
 		needed = false;
 
 		if (mlme_act == MLME_ACTION_NONE
@@ -889,25 +1172,46 @@ static void rtw_dfs_rd_en_decision(struct dvobj_priv *dvobj, enum phl_band_idx h
 			}
 		}
 
-		needed = _rtw_dfs_rd_en_decision(rfctl, &mstate, u_band, u_ch, u_bw, u_offset, &ld_sta_in_dfs);
+		needed = _rtw_dfs_rd_en_decision(rfctl, &mstate, u_band, u_ch, u_bw, u_offset
+				, &rd_freq_hi, &rd_freq_lo, &lgd_sta_in_dfs);
 
 apply:
 		if (adapter)
-			RTW_INFO(FUNC_HWBAND_FMT" needed:%d, "ADPT_FMT" mlme_act:%u, excl_ifbmp:0x%02x\n"
-				, FUNC_HWBAND_ARG(band_idx), needed, ADPT_ARG(adapter), mlme_act, excl_ifbmp);
+			RTW_INFO(FUNC_HWBAND_FMT" needed:%d, lgd_sta_in_dfs:%d, "ADPT_FMT" mlme_act:%u, excl_ifbmp:0x%02x\n"
+				, FUNC_HWBAND_ARG(band_idx), needed, lgd_sta_in_dfs, ADPT_ARG(adapter), mlme_act, excl_ifbmp);
 		else
-			RTW_INFO(FUNC_HWBAND_FMT" needed:%d, excl_ifbmp:0x%02x\n"
-				, FUNC_HWBAND_ARG(band_idx), needed, excl_ifbmp);
+			RTW_INFO(FUNC_HWBAND_FMT" needed:%d, lgd_sta_in_dfs:%d, excl_ifbmp:0x%02x\n"
+				, FUNC_HWBAND_ARG(band_idx), needed, lgd_sta_in_dfs, excl_ifbmp);
 
-		RTW_INFO(FUNC_HWBAND_FMT" ld_sta_num:%u, lg_sta_num:%u, ap_num:%u, mesh_num:%u, %u,%u,%u,%u\n"
+		RTW_INFO(FUNC_HWBAND_FMT" ld_sta:%u, lg_sta:%u, ap:%u, mesh:%u, %u,%u,%u,%u, rd_freq:%u~%u\n"
 			, FUNC_HWBAND_ARG(band_idx), MSTATE_STA_LD_NUM(&mstate), MSTATE_STA_LG_NUM(&mstate)
 			, MSTATE_AP_NUM(&mstate), MSTATE_MESH_NUM(&mstate)
-			, u_band, u_ch, u_bw, u_offset);
+			, u_band, u_ch, u_bw, u_offset, rd_freq_lo, rd_freq_hi);
 
-		if (needed == _TRUE)
-			rtw_dfs_rd_enable(rfctl, band_idx, u_ch, u_bw, u_offset, ld_sta_in_dfs);
-		else
-			rtw_dfs_rd_disable(rfctl, band_idx, u_ch, u_bw, u_offset, ld_sta_in_dfs);
+		if (needed && rtw_rfctl_radar_detect_supported(rfctl))
+			rtw_dfs_rd_enable(rfctl, band_idx, u_ch, u_bw, u_offset, rd_freq_hi, rd_freq_lo, lgd_sta_in_dfs);
+		else {
+			rtw_dfs_rd_disable(rfctl, band_idx, u_ch, u_bw, u_offset, rd_freq_hi, rd_freq_lo, lgd_sta_in_dfs);
+			if (needed) {
+				_adapter *m_iface = rtw_mi_get_ap_mesh_iface_by_hwband(dvobj, band_idx);
+				u8 ifbmp_m = rtw_mi_get_ap_mesh_ifbmp_by_hwband(dvobj, band_idx);
+				u8 ifbmp_s = rtw_mi_get_lgd_sta_ifbmp_by_hwband(dvobj, band_idx);
+
+				RTW_INFO(FUNC_HWBAND_FMT" radart detect for this region not supported\n", FUNC_HWBAND_ARG(band_idx));
+
+				if (!m_iface) {
+					rtw_warn_on(1);
+					return;
+				}
+
+				if (0) {
+					/* TODO: do CSA if supported */
+				} else {
+					rtw_change_bss_bchbw_cmd(m_iface, RTW_CMDF_DIRECTLY
+						, ifbmp_m, ifbmp_s, REQ_BAND_NONE, REQ_CH_NONE, REQ_BW_ORI, REQ_OFFSET_NONE);
+				}
+			}
+		}
 	}
 }
 
@@ -920,6 +1224,61 @@ void rtw_dfs_rd_en_dec_on_mlme_act(_adapter *adapter, struct _ADAPTER_LINK *alin
 	rtw_warn_on(mlme_act == MLME_ACTION_NONE);
 }
 
+void dump_radar_detect_status(void *sel, struct rf_ctl_t *rfctl, const char *title)
+{
+	u8 hwband;
+
+#ifdef CONFIG_DFS_MASTER
+	for (hwband = HW_BAND_0; hwband < HW_BAND_MAX; hwband++) {
+		if (rfctl->radar_detect_enabled && hwband == rfctl->radar_detect_hwband)
+			break;
+	}
+#else
+	hwband = HW_BAND_MAX;
+#endif
+	if (hwband >= HW_BAND_MAX) {
+		for (hwband = HW_BAND_0; hwband < HW_BAND_MAX; hwband++)
+			if (rfctl->radar_detect_by_others[hwband])
+				break;
+	}
+
+	if (hwband < HW_BAND_MAX) { /* by self or only by others */
+		RTW_PRINT_SEL(sel, "%s cch %u-%s"
+			, title
+			, rfctl->radar_detect_cch[hwband]
+			, ch_width_str(rfctl->radar_detect_bw[hwband])
+		);
+
+#ifdef CONFIG_DFS_MASTER
+		if (rfctl->radar_detect_enabled) {
+			u32 non_ocp_ms = 0;
+			u32 cac_ms = 0;
+			u8 dfs_domain = rtw_rfctl_get_dfs_domain(rfctl);
+
+			_RTW_PRINT_SEL(sel, ", domain:%s(%u)", rtw_dfs_regd_str(dfs_domain), dfs_domain);
+
+			if (IS_CH_WAITING(rfctl)) {
+				if (!IS_UNDER_CAC(rfctl)) {
+					non_ocp_ms = rtw_systime_to_ms(rfctl->cac_start_time - rtw_get_current_time());
+					cac_ms = rtw_systime_to_ms(rfctl->cac_end_time - rfctl->cac_start_time);
+				} else
+					cac_ms = rtw_systime_to_ms(rfctl->cac_end_time - rtw_get_current_time());
+			}
+
+			if (non_ocp_ms)
+				_RTW_PRINT_SEL(sel, ", non_ocp:%d", non_ocp_ms);
+			if (cac_ms)
+				_RTW_PRINT_SEL(sel, ", cac:%d", cac_ms);
+		} else
+#endif
+			_RTW_PRINT_SEL(sel, ", by AP of STA link");
+
+		_RTW_PRINT_SEL(sel, "\n");
+	}
+}
+#endif /* CONFIG_DFS && CONFIG_IEEE80211_BAND_5GHZ */
+
+#ifdef CONFIG_DFS_MASTER
 void rtw_dfs_rd_en_dec_update(struct dvobj_priv *dvobj, enum phl_band_idx hwband)
 {
 	rtw_dfs_rd_en_decision(dvobj, hwband, NULL, NULL, MLME_ACTION_NONE, 0);
@@ -955,6 +1314,43 @@ u8 rtw_dfs_rd_en_decision_cmd(struct dvobj_priv *dvobj, enum phl_band_idx hwband
 exit:
 	return res;
 }
+
+void rtw_indicate_cac_state_on_bss_start(_adapter *adapter)
+{
+	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
+
+	if (IS_UNDER_CAC(rfctl)) {
+		u8 rd_hwband = rfctl->radar_detect_hwband;
+
+		if (rtw_iface_is_operate_at_hwband(adapter, rd_hwband))
+			rtw_os_indicate_cac_started(rfctl, rd_hwband, BIT(adapter->iface_id)
+				, rfctl->radar_detect_cch[rd_hwband], rfctl->radar_detect_bw[rd_hwband]);
+	} else {
+		u8 band_idx;
+
+		for (band_idx = HW_BAND_0; band_idx < HW_BAND_MAX; band_idx++) {
+			if (!rfctl->radar_detect_by_others[band_idx])
+				continue;
+			if (!rtw_iface_is_operate_at_hwband(adapter, band_idx))
+				continue;
+			rtw_os_force_cac_finished(rfctl, band_idx, BIT(adapter->iface_id)
+				, rfctl->radar_detect_cch[band_idx], rfctl->radar_detect_bw[band_idx]);
+		}
+	}
+}
+
+void rtw_indicate_cac_state_on_bss_stop(_adapter *adapter)
+{
+	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
+
+	if (IS_UNDER_CAC(rfctl)) {
+		u8 rd_hwband = rfctl->radar_detect_hwband;
+
+		if (rtw_iface_is_operate_at_hwband(adapter, rd_hwband))
+			rtw_os_indicate_cac_aborted(rfctl, rd_hwband, BIT(adapter->iface_id)
+				, rfctl->radar_detect_cch[rd_hwband], rfctl->radar_detect_bw[rd_hwband]);
+	}
+}
 #endif /* CONFIG_DFS_MASTER */
 
 #ifdef CONFIG_RTW_ACS
@@ -963,9 +1359,10 @@ exit:
 
 /* choose channel with shortest waiting (non ocp + cac) time */
 static bool rtw_choose_shortest_waiting_ch(struct rf_ctl_t *rfctl
-	, enum band_type sel_band, u8 sel_ch, u8 max_bw
+	, enum band_type sel_band, u8 sel_ch, u8 max_bw, enum chan_offset sel_offset
 	, enum band_type *dec_band, u8 *dec_ch, u8 *dec_bw, u8 *dec_offset
-	, u8 e_flags, u8 d_flags, enum band_type cur_band, u8 cur_ch, bool by_int_info, u8 mesh_only)
+	, u8 e_flags, u8 d_flags, enum band_type cur_band, u8 cur_ch, enum chan_offset cur_offset
+	, bool by_int_info, u8 mesh_only)
 {
 #ifndef DBG_CHOOSE_SHORTEST_WAITING_CH
 #define DBG_CHOOSE_SHORTEST_WAITING_CH 0
@@ -977,10 +1374,10 @@ static bool rtw_choose_shortest_waiting_ch(struct rf_ctl_t *rfctl
 #endif
 	struct registry_priv *regsty = dvobj_to_regsty(dvobj);
 	enum band_type band;
-	u8 ch, bw, offset;
+	u8 ch, bw, offset, r_offset[2], r_offset_num;
 	enum band_type band_c = BAND_MAX;
 	u8 ch_c = 0, bw_c = 0, offset_c = 0;
-	int i;
+	int i, j;
 	u32 min_waiting_ms = 0;
 	u16 int_factor_c = 0;
 
@@ -989,9 +1386,9 @@ static bool rtw_choose_shortest_waiting_ch(struct rf_ctl_t *rfctl
 		return _FALSE;
 	}
 
-	RTW_INFO("%s: sel_ch:%s-%u max_bw:%u e_flags:0x%02x d_flags:0x%02x cur_ch:%s-%u within_sb:%d%s%s\n"
-		, __func__, band_str(sel_band), sel_ch, max_bw, e_flags, d_flags
-		, band_str(cur_band), cur_ch, rfctl->ch_sel_within_same_band
+	RTW_INFO("%s: sel_ch:%s-%u(%u) max_bw:%u e_flags:0x%02x d_flags:0x%02x cur_ch:%s-%u(%u) within_sb:%d%s%s\n"
+		, __func__, band_str(sel_band), sel_ch, sel_offset, max_bw, e_flags, d_flags
+		, band_str(cur_band), cur_ch, cur_offset, rfctl->ch_sel_within_same_band
 		, by_int_info ? " int" : "", mesh_only ? " mesh_only" : "");
 
 	/* full search and narrow bw judegement first to avoid potetial judegement timing issue */
@@ -1039,53 +1436,63 @@ static bool rtw_choose_shortest_waiting_ch(struct rf_ctl_t *rfctl
 			if (mesh_only && band == BAND_ON_24G && ch >= 5 && ch <= 9 && bw > CHANNEL_WIDTH_20)
 				continue;
 
-			if (!rtw_get_offset_by_bchbw(band, ch, bw, &offset))
-				continue;
-
-			if (!rtw_chset_is_bchbw_valid(chset, band, ch, bw, offset, 0, 0))
-				continue;
-
-			if ((e_flags & RTW_CHF_DFS) || (d_flags & RTW_CHF_DFS)) {
-				dfs_ch = rtw_chset_is_dfs_bchbw(chset, band, ch, bw, offset);
-				if (((e_flags & RTW_CHF_DFS) && !dfs_ch)
-					|| ((d_flags & RTW_CHF_DFS) && dfs_ch))
+			if (sel_offset == CHAN_OFFSET_NO_EXT || bw == CHANNEL_WIDTH_20) {
+				if (!rtw_get_offsets_by_bchbw(band, ch, bw, r_offset, &r_offset_num))
 					continue;
+			} else {
+				r_offset[0] = sel_offset;
+				r_offset_num = 1;
 			}
 
-			#ifdef CONFIG_DFS_MASTER
-			waiting_ms = rtw_get_ch_waiting_ms(rfctl, band, ch, bw, offset, &non_ocp_ms, &cac_ms);
-			#endif
+			for (j = 0; j < r_offset_num; j++) {
+				offset = r_offset[j];
+				if (!rtw_chset_is_bchbw_valid(chset, band, ch, bw, offset, 0, 0))
+					continue;
 
-			#ifdef CONFIG_RTW_ACS
-			if (by_int_info) {
-				/* for now, consider only primary channel */
-				int_factor = hal_data->acs.interference_time[i];
-			}
-			#endif
+				if ((e_flags & RTW_CHF_DFS) || (d_flags & RTW_CHF_DFS)) {
+					dfs_ch = rtw_chset_is_dfs_bchbw(chset, band, ch, bw, offset);
+					if (((e_flags & RTW_CHF_DFS) && !dfs_ch)
+						|| ((d_flags & RTW_CHF_DFS) && dfs_ch))
+						continue;
+				}
 
-			if (DBG_CHOOSE_SHORTEST_WAITING_CH)
-				RTW_INFO("%s:%s,%u,%u,%u %u(non_ocp:%u, cac:%u), int:%u\n"
-					, __func__, band_str(band), ch, bw, offset, waiting_ms, non_ocp_ms, cac_ms, int_factor);
+				#ifdef CONFIG_DFS_MASTER
+				waiting_ms = rtw_get_ch_waiting_ms(rfctl, band, ch, bw, offset, &non_ocp_ms, &cac_ms);
+				#endif
 
-			if (ch_c == 0
-				/* first: smaller wating time */
-				|| min_waiting_ms > waiting_ms
-				/* then: less interference */
-				|| (min_waiting_ms == waiting_ms && int_factor_c > int_factor)
-				/* then: wider bw */
-				|| (min_waiting_ms == waiting_ms && int_factor_c == int_factor && bw > bw_c)
-				/* if all condition equal, same channel -> same band prefer */
-				|| (min_waiting_ms == waiting_ms && int_factor_c == int_factor && bw == bw_c
-					&& (((cur_band != band_c || cur_ch != ch_c) && (cur_band == band && cur_ch == ch))
-						|| (cur_band != band_c && cur_band == band))
-					)
-			) {
-				band_c = band;
-				ch_c = ch;
-				bw_c = bw;
-				offset_c = offset;
-				min_waiting_ms = waiting_ms;
-				int_factor_c = int_factor;
+				#ifdef CONFIG_RTW_ACS
+				if (by_int_info) {
+					/* for now, consider only primary channel */
+					int_factor = hal_data->acs.interference_time[i];
+				}
+				#endif
+
+				if (DBG_CHOOSE_SHORTEST_WAITING_CH)
+					RTW_INFO("%s:%s,%u,%u,%u %u(non_ocp:%u, cac:%u), int:%u\n"
+						, __func__, band_str(band), ch, bw, offset, waiting_ms, non_ocp_ms, cac_ms, int_factor);
+
+				if (ch_c == 0
+					/* first: smaller wating time */
+					|| min_waiting_ms > waiting_ms
+					/* then: less interference */
+					|| (min_waiting_ms == waiting_ms && int_factor_c > int_factor)
+					/* then: wider bw */
+					|| (min_waiting_ms == waiting_ms && int_factor_c == int_factor && bw > bw_c)
+					/* if all condition equal, same channel&offset -> same channel -> same band prefer */
+					|| (min_waiting_ms == waiting_ms && int_factor_c == int_factor && bw == bw_c
+						&& (((cur_band != band_c || cur_ch != ch_c || cur_offset != offset_c)
+								&& (cur_band == band && cur_ch == ch && cur_offset == offset))
+							|| ((cur_band != band_c || cur_ch != ch_c) && (cur_band == band && cur_ch == ch))
+							|| (cur_band != band_c && cur_band == band))
+						)
+				) {
+					band_c = band;
+					ch_c = ch;
+					bw_c = bw;
+					offset_c = offset;
+					min_waiting_ms = waiting_ms;
+					int_factor_c = int_factor;
+				}
 			}
 		}
 	}
@@ -1109,8 +1516,8 @@ static bool rtw_choose_shortest_waiting_ch(struct rf_ctl_t *rfctl
 }
 
 bool rtw_rfctl_choose_bchbw(struct rf_ctl_t *rfctl
-	, enum band_type sel_band, u8 sel_ch, u8 max_bw
-	, enum band_type cur_band, u8 cur_ch
+	, enum band_type sel_band, u8 sel_ch, u8 max_bw, enum chan_offset sel_offset
+	, enum band_type cur_band, u8 cur_ch, enum chan_offset cur_offset
 	, enum band_type *band, u8 *ch, u8 *bw, u8 *offset
 	, bool by_int_info, u8 mesh_only, const char *caller)
 {
@@ -1121,10 +1528,10 @@ bool rtw_rfctl_choose_bchbw(struct rf_ctl_t *rfctl
 		if (rfctl->radar_detected
 			&& rfctl->dbg_dfs_choose_dfs_ch_first
 		) {
-			ch_avail = rtw_choose_shortest_waiting_ch(rfctl, sel_band, sel_ch, max_bw
+			ch_avail = rtw_choose_shortest_waiting_ch(rfctl, sel_band, sel_ch, max_bw, sel_offset
 						, band, ch, bw, offset
 						, RTW_CHF_DFS, 0
-						, cur_band, cur_ch, by_int_info, mesh_only);
+						, cur_band, cur_ch, cur_offset, by_int_info, mesh_only);
 			if (ch_avail == _TRUE) {
 				RTW_INFO("%s choose 5G DFS channel for debug\n", caller);
 				goto exit;
@@ -1134,10 +1541,10 @@ bool rtw_rfctl_choose_bchbw(struct rf_ctl_t *rfctl
 		if (rfctl->radar_detected
 			&& (rfctl->dfs_ch_sel_e_flags || rfctl->dfs_ch_sel_d_flags)
 		) {
-			ch_avail = rtw_choose_shortest_waiting_ch(rfctl, sel_band, sel_ch, max_bw
+			ch_avail = rtw_choose_shortest_waiting_ch(rfctl, sel_band, sel_ch, max_bw, sel_offset
 						, band, ch, bw, offset
 						, rfctl->dfs_ch_sel_e_flags, rfctl->dfs_ch_sel_d_flags
-						, cur_band, cur_ch, by_int_info, mesh_only);
+						, cur_band, cur_ch, cur_offset, by_int_info, mesh_only);
 			if (ch_avail == _TRUE) {
 				RTW_INFO("%s choose with dfs_ch_sel_ e_flags:0x%02x d_flags:0x%02x for debug\n"
 					, caller, rfctl->dfs_ch_sel_e_flags, rfctl->dfs_ch_sel_d_flags);
@@ -1145,17 +1552,17 @@ bool rtw_rfctl_choose_bchbw(struct rf_ctl_t *rfctl
 			}
 		}
 
-		ch_avail = rtw_choose_shortest_waiting_ch(rfctl, sel_band, sel_ch, max_bw
+		ch_avail = rtw_choose_shortest_waiting_ch(rfctl, sel_band, sel_ch, max_bw, sel_offset
 					, band, ch, bw, offset
 					, 0, 0
-					, cur_band, cur_ch, by_int_info, mesh_only);
+					, cur_band, cur_ch, cur_offset, by_int_info, mesh_only);
 	} else
 #endif /* defined(CONFIG_DFS_MASTER) */
 	{
-		ch_avail = rtw_choose_shortest_waiting_ch(rfctl, sel_band, sel_ch, max_bw
+		ch_avail = rtw_choose_shortest_waiting_ch(rfctl, sel_band, sel_ch, max_bw, sel_offset
 					, band, ch, bw, offset
 					, 0, RTW_CHF_DFS
-					, cur_band, cur_ch, by_int_info, mesh_only);
+					, cur_band, cur_ch, cur_offset, by_int_info, mesh_only);
 	}
 #if defined(CONFIG_DFS_MASTER)
 exit:
@@ -1167,16 +1574,16 @@ exit:
 }
 
 #if CONFIG_ALLOW_FUNC_2G_5G_ONLY
-RTW_FUNC_2G_5G_ONLY bool rtw_rfctl_choose_chbw(struct rf_ctl_t *rfctl, u8 sel_ch, u8 max_bw, u8 cur_ch
-	, u8 *ch, u8 *bw, u8 *offset, bool by_int_info, u8 mesh_only, const char *caller)
+RTW_FUNC_2G_5G_ONLY bool rtw_rfctl_choose_chbw(struct rf_ctl_t *rfctl, u8 sel_ch, u8 max_bw, enum chan_offset sel_offset
+	, u8 cur_ch, enum chan_offset cur_offset, u8 *ch, u8 *bw, u8 *offset, bool by_int_info, u8 mesh_only, const char *caller)
 {
 	enum band_type sel_band = sel_ch ? (rtw_is_2g_ch(sel_ch) ? BAND_ON_24G : BAND_ON_5G) : BAND_MAX;
 	enum band_type cur_band = rtw_is_2g_ch(cur_ch) ? BAND_ON_24G : BAND_ON_5G;
 	enum band_type *band = NULL;
 
 	return rtw_rfctl_choose_bchbw(rfctl
-		, sel_band, sel_ch, max_bw
-		, cur_band, cur_ch
+		, sel_band, sel_ch, max_bw, sel_offset
+		, cur_band, cur_ch, cur_offset
 		, band, ch, bw, offset
 		, by_int_info, mesh_only, caller);
 }
@@ -1193,6 +1600,7 @@ void rtw_rfctl_dfs_init(struct rf_ctl_t *rfctl, struct registry_priv *regsty)
 			, rtw_dfs_regd_str(rfctl->dfs_region_domain), rtw_dfs_regd_str(RTW_DFS_REGD_NONE));
 		rfctl->dfs_region_domain = RTW_DFS_REGD_NONE;
 	}
+	rfctl->non_ocp_finished = true;
 	rfctl->cac_start_time = rfctl->cac_end_time = RTW_CAC_STOPPED;
 	rtw_init_timer(&(rfctl->radar_detect_timer), NULL, rtw_dfs_rd_timer_hdl, rfctl);
 #endif

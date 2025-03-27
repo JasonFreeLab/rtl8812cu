@@ -86,7 +86,7 @@
 
 
 /* xmit extension buff defination */
-#define MAX_XMIT_EXTBUF_SZ	(4096)
+#define MAX_XMIT_EXTBUF_SZ	(1536)
 
 #ifdef CONFIG_SINGLE_XMIT_BUF
 	#define NR_XMIT_EXTBUFF	(1)
@@ -100,18 +100,12 @@
 	#define MAX_CMDBUF_SZ	(512 * 18)
 #elif defined(CONFIG_RTL8723D) && defined(CONFIG_LPS_POFF)
 	#define MAX_CMDBUF_SZ	(128*70) /*(8960)*/
-#elif (defined(CONFIG_RTL8822C) || defined(CONFIG_RTL8822E)) && defined(CONFIG_WAR_OFFLOAD)
+#elif (defined(CONFIG_RTL8822C) || defined(CONFIG_RTL8822E)) && (defined(CONFIG_WAR_OFFLOAD) || defined(CONFIG_MDNS_OFFLOAD))
 	#define MAX_CMDBUF_SZ	(128*128) /*(16k) */
 #elif defined(CONFIG_RTL8723F) && defined(CONFIG_WAR_OFFLOAD)
 	#define MAX_CMDBUF_SZ	(128*64) /*(8192) */
-#elif defined(CONFIG_RTL8822E) && defined(CONFIG_LPS_PG)
-	#define MAX_CMDBUF_SZ   (128*256) /*(32768) */
 #else
 	#define MAX_CMDBUF_SZ	(5120)	/* (4096) */
-#endif
-
-#if defined(CONFIG_RTL8822E) && defined(CONFIG_LPS_PG)
-	#define MAX_RSVDPAGE_BKUP_SIZE_IN_FW_PG	8192
 #endif
 
 #define MAX_BEACON_LEN	512
@@ -485,7 +479,7 @@ struct pkt_attrib {
 	u8 icmp_pkt;
 	u8 hipriority_pkt; /* high priority packet */
 
-#if defined(CONFIG_BEAMFORMING) || defined(CONFIG_BEAMFORMING_MONITOR)
+#ifdef CONFIG_BEAMFORMING
 	u16 txbf_p_aid;/*beamforming Partial_AID*/
 	u16 txbf_g_id;/*beamforming Group ID*/
 
@@ -498,14 +492,8 @@ struct pkt_attrib {
 	u8 bf_pkt_type;
 #endif
 
-	u8  inject; /* == a5 if injected */
-
 #ifdef CONFIG_RTW_MGMT_QUEUE
 	u8 ps_dontq; /* 1: this frame can't be queued at PS state */
-#endif
-#if defined(CONFIG_CHANGE_DTIM_PERIOD) && defined(CONFIG_AP_MODE)
-	u8 dtim_period;
-	u8 tim_ie_offset;
 #endif
 };
 
@@ -556,6 +544,7 @@ struct  submit_ctx {
 	systime submit_time; /* */
 	u32 timeout_ms; /* <0: not synchronous, 0: wait forever, >0: up to ms waiting */
 	int status; /* status for operation */
+	void *rsp; /* rsp buffer allocated by handler */
 #ifdef PLATFORM_LINUX
 	struct completion done;
 #endif
@@ -741,9 +730,6 @@ struct agg_pkt_info {
 enum cmdbuf_type {
 	CMDBUF_BEACON = 0x00,
 	CMDBUF_RSVD,
-#if defined(CONFIG_LPS) && defined(CONFIG_LPS_PG) && defined(CONFIG_RTL8822E)
-	CMDBUF_RSVD_KIP,
-#endif
 	CMDBUF_MAX
 };
 
@@ -907,11 +893,6 @@ struct	xmit_priv	{
 extern struct xmit_frame *__rtw_alloc_cmdxmitframe(struct xmit_priv *pxmitpriv,
 		enum cmdbuf_type buf_type);
 #define rtw_alloc_cmdxmitframe(p) __rtw_alloc_cmdxmitframe(p, CMDBUF_RSVD)
-
-#if defined(CONFIG_LPS) && defined(CONFIG_LPS_PG) && defined(CONFIG_RTL8822E)
-#define rtw_alloc_cmdxmitframe_kip(p) __rtw_alloc_cmdxmitframe(p, CMDBUF_RSVD_KIP)
-#endif
-
 #if defined(CONFIG_RTL8192E) && defined(CONFIG_PCI_HCI)
 extern struct xmit_frame *__rtw_alloc_cmdxmitframe_8192ee(struct xmit_priv *pxmitpriv,
 		enum cmdbuf_type buf_type);

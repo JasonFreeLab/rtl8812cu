@@ -76,6 +76,9 @@ void odm_tx_pwr_track_set_pwr8822c(void *dm_void, enum pwrtrack_method method,
 	struct dm_rf_calibration_struct *cali_info = &(dm->rf_calibrate_info);
 	struct _hal_rf_ *rf = &dm->rf_table;
 	struct _halrf_tssi_data *tssi = &rf->halrf_tssi_data;
+
+	u32 bitmask_6_0 = BIT(6) | BIT(5) | BIT(4) | BIT(3) |
+				BIT(2) | BIT(1) | BIT(0);
 	
 	RF_DBG(dm, DBG_RF_TX_PWR_TRACK,
 	       "pRF->absolute_ofdm_swing_idx=%d   pRF->remnant_ofdm_swing_idx=%d   pRF->absolute_cck_swing_idx=%d   pRF->remnant_cck_swing_idx=%d   rf_path=%d\n",
@@ -88,20 +91,20 @@ void odm_tx_pwr_track_set_pwr8822c(void *dm_void, enum pwrtrack_method method,
 
 		switch (rf_path) {
 		case RF_PATH_A:
-			odm_set_bb_reg(dm, R_0x18a0, 0x000000ff, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0xff));
+			odm_set_bb_reg(dm, R_0x18a0, bitmask_6_0, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0x7f));
 			odm_set_rf_reg(dm, rf_path, RF_0x7f, 0x00002, 0x0);
 			odm_set_rf_reg(dm, rf_path, RF_0x7f, 0x00100, 0x0);
 			RF_DBG(dm, DBG_RF_TX_PWR_TRACK,
 			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x18a0,
-			       odm_get_bb_reg(dm, R_0x18a0, 0x000000ff));
+			       odm_get_bb_reg(dm, R_0x18a0, bitmask_6_0));
 			break;
 		case RF_PATH_B:
-			odm_set_bb_reg(dm, R_0x41a0, 0x000000ff, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0xff));
+			odm_set_bb_reg(dm, R_0x41a0, bitmask_6_0, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0x7f));
 			odm_set_rf_reg(dm, rf_path, RF_0x7f, 0x00002, 0x0);
 			odm_set_rf_reg(dm, rf_path, RF_0x7f, 0x00100, 0x0);
 			RF_DBG(dm, DBG_RF_TX_PWR_TRACK,
 			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x41a0,
-			       odm_get_bb_reg(dm, R_0x41a0, 0x000000ff));
+			       odm_get_bb_reg(dm, R_0x41a0, bitmask_6_0));
 			break;
 		default:
 			break;
@@ -109,14 +112,14 @@ void odm_tx_pwr_track_set_pwr8822c(void *dm_void, enum pwrtrack_method method,
 	} else if (method == BBSWING) { /*use for mp driver clean power tracking status*/
 		switch (rf_path) {
 		case RF_PATH_A:
-			odm_set_bb_reg(dm, R_0x18a0, 0x000000ff, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0xff));
+			odm_set_bb_reg(dm, R_0x18a0, bitmask_6_0, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0x7f));
 			RF_DBG(dm, DBG_RF_TX_PWR_TRACK,
-			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x18a0, odm_get_bb_reg(dm, R_0x18a0, 0x000000ff));
+			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x18a0, odm_get_bb_reg(dm, R_0x18a0, bitmask_6_0));
 			break;
 		case RF_PATH_B:
-			odm_set_bb_reg(dm, R_0x41a0, 0x000000ff, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0xff));
+			odm_set_bb_reg(dm, R_0x41a0, bitmask_6_0, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0x7f));
 			RF_DBG(dm, DBG_RF_TX_PWR_TRACK,
-			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x41a0, odm_get_bb_reg(dm, R_0x41a0, 0x000000ff));
+			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x41a0, odm_get_bb_reg(dm, R_0x41a0, bitmask_6_0));
 			break;
 		default:
 			break;
@@ -124,14 +127,14 @@ void odm_tx_pwr_track_set_pwr8822c(void *dm_void, enum pwrtrack_method method,
 	} else if (method == MIX_MODE) {
 		switch (rf_path) {
 		case RF_PATH_A:
-			odm_set_bb_reg(dm, R_0x18a0, 0x000000ff, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0xff));
+			odm_set_bb_reg(dm, R_0x18a0, bitmask_6_0, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0x7f));
 			RF_DBG(dm, DBG_RF_TX_PWR_TRACK,
-			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x18a0, odm_get_bb_reg(dm, R_0x18a0, 0x000000ff));
+			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x18a0, odm_get_bb_reg(dm, R_0x18a0, bitmask_6_0));
 			break;
 		case RF_PATH_B:
-			odm_set_bb_reg(dm, R_0x41a0, 0x000000ff, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0xff));
+			odm_set_bb_reg(dm, R_0x41a0, bitmask_6_0, (cali_info->absolute_ofdm_swing_idx[rf_path] & 0x7f));
 			RF_DBG(dm, DBG_RF_TX_PWR_TRACK,
-			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x41a0, odm_get_bb_reg(dm, R_0x41a0, 0x000000ff));
+			       "Path-%d 0x%x=0x%x\n", rf_path, R_0x41a0, odm_get_bb_reg(dm, R_0x41a0, bitmask_6_0));
 			break;
 		default:
 			break;
@@ -162,7 +165,9 @@ void get_delta_swing_table_8822c(void *dm_void,
 			*temperature_up_b = cali_info->delta_swing_table_idx_2gb_p;
 			*temperature_down_b = cali_info->delta_swing_table_idx_2gb_n;
 		}
-	} else if (channel >= 16 && channel <= 96) {
+	}
+
+	if (channel >= 36 && channel <= 64) {
 		*temperature_up_a = cali_info->delta_swing_table_idx_5ga_p[0];
 		*temperature_down_a = cali_info->delta_swing_table_idx_5ga_n[0];
 		*temperature_up_b = cali_info->delta_swing_table_idx_5gb_p[0];
@@ -172,7 +177,7 @@ void get_delta_swing_table_8822c(void *dm_void,
 		*temperature_down_a = cali_info->delta_swing_table_idx_5ga_n[1];
 		*temperature_up_b = cali_info->delta_swing_table_idx_5gb_p[1];
 		*temperature_down_b = cali_info->delta_swing_table_idx_5gb_n[1];
-	} else { /*channel >= 149 && channel <= 177*/
+	} else if (channel >= 149 && channel <= 177) {
 		*temperature_up_a = cali_info->delta_swing_table_idx_5ga_p[2];
 		*temperature_down_a = cali_info->delta_swing_table_idx_5ga_n[2];
 		*temperature_up_b = cali_info->delta_swing_table_idx_5gb_p[2];
@@ -182,6 +187,7 @@ void get_delta_swing_table_8822c(void *dm_void,
 
 void _phy_aac_calibrate_8822c(struct dm_struct *dm)
 {
+#if 1
 	u32 cnt = 0;
 
 	RF_DBG(dm, DBG_RF_LCK, "[AACK]AACK start!!!!!!!\n");
@@ -200,6 +206,7 @@ void _phy_aac_calibrate_8822c(struct dm_struct *dm)
 	//odm_set_rf_reg(dm, RF_PATH_B, 0xbb, RFREGOFFSETMASK, 0x80010);
 
 	RF_DBG(dm, DBG_RF_IQK, "[AACK]AACK end!!!!!!!\n");
+#endif
 }
 void _phy_rt_calibrate_8822c(struct dm_struct *dm)
 {
@@ -797,7 +804,7 @@ void halrf_dack_restore_8822c(void *dm_void)
 	halrf_biask_restore_8822c(dm);
 }
 
-void halrf_polling_check(void *dm_void, u32 add, u32 bmask, u32 data)
+void halrf_polling_check_8822c(void *dm_void, u32 add, u32 bmask, u32 data)
 {
 	struct dm_struct *dm = (struct dm_struct *)dm_void;
 	u32 c = 0;
@@ -939,8 +946,8 @@ void halrf_dac_cal_8822c(void *dm_void, boolean force)
 //		ODM_delay_ms(20);
 		odm_write_4byte(dm, 0x18d4, 0x62000000);
 		ODM_delay_ms(1);
-		halrf_polling_check(dm, 0x2808, 0x7fff80, 0xffff);
-		halrf_polling_check(dm, 0x2834, 0x7fff80, 0xffff);
+		halrf_polling_check_8822c(dm, 0x2808, 0x7fff80, 0xffff);
+		halrf_polling_check_8822c(dm, 0x2834, 0x7fff80, 0xffff);
 		odm_write_4byte(dm, 0x18b8, 0x02000000);
 		ODM_delay_ms(1);
 		odm_write_4byte(dm, 0x18bc, 0x0008ff87);
@@ -1010,8 +1017,8 @@ void halrf_dac_cal_8822c(void *dm_void, boolean force)
 		odm_write_4byte(dm, 0x18b8, 0x62000000);
 		odm_write_4byte(dm, 0x18d4, 0x62000000);
 		ODM_delay_ms(1);
-		halrf_polling_check(dm, 0x2824, 0x07f80000, ic);
-		halrf_polling_check(dm, 0x2850, 0x07f80000, qc);
+		halrf_polling_check_8822c(dm, 0x2824, 0x07f80000, ic);
+		halrf_polling_check_8822c(dm, 0x2850, 0x07f80000, qc);
 		odm_write_4byte(dm, 0x18b8, 0x02000000);
 		ODM_delay_ms(1);
 		odm_set_bb_reg(dm, 0x18bc, 0xe, 0x3);
@@ -1141,8 +1148,8 @@ void halrf_dac_cal_8822c(void *dm_void, boolean force)
 		odm_write_4byte(dm, 0x41b8, 0x62000000);
 		odm_write_4byte(dm, 0x41d4, 0x62000000);
 		ODM_delay_ms(1);
-		halrf_polling_check(dm, 0x4508, 0x7fff80, 0xffff);
-		halrf_polling_check(dm, 0x4534, 0x7fff80, 0xffff);
+		halrf_polling_check_8822c(dm, 0x4508, 0x7fff80, 0xffff);
+		halrf_polling_check_8822c(dm, 0x4534, 0x7fff80, 0xffff);
 		odm_write_4byte(dm, 0x41b8, 0x02000000);
 		ODM_delay_ms(1);
 		odm_write_4byte(dm, 0x41bc, 0x0008ff87);
@@ -1211,8 +1218,8 @@ void halrf_dac_cal_8822c(void *dm_void, boolean force)
 		odm_write_4byte(dm, 0x41b8, 0x62000000);
 		odm_write_4byte(dm, 0x41d4, 0x62000000);
 		ODM_delay_ms(1);
-		halrf_polling_check(dm, 0x4524, 0x07f80000, ic);
-		halrf_polling_check(dm, 0x4550, 0x07f80000, qc);
+		halrf_polling_check_8822c(dm, 0x4524, 0x07f80000, ic);
+		halrf_polling_check_8822c(dm, 0x4550, 0x07f80000, qc);
 		odm_write_4byte(dm, 0x41b8, 0x02000000);
 		ODM_delay_ms(1);
 		odm_set_bb_reg(dm, 0x41bc, 0xe, 0x3);
@@ -1624,4 +1631,5 @@ u8 halrf_get_thermal_8822c(
 
 	return (u8)odm_get_rf_reg(dm, (enum rf_path)path, RF_0x42, 0x0007e);
 }
+
 #endif /*(RTL8822C_SUPPORT == 0)*/

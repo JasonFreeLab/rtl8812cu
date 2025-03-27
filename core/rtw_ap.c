@@ -148,12 +148,9 @@ static void update_BCNTIM(_adapter *padapter)
 			if (pbackup_remainder_ie && premainder_ie)
 				_rtw_memcpy(pbackup_remainder_ie, premainder_ie, remainder_ielen);
 		}
-#ifdef CONFIG_CHANGE_DTIM_PERIOD
-		dst_ie += rtw_set_tim_ie(0, padapter->registrypriv.dtim_period, pstapriv->tim_bitmap, pstapriv->aid_bmp_len, dst_ie);
-#else
+
 		/* append TIM IE */
 		dst_ie += rtw_set_tim_ie(0, 1, pstapriv->tim_bitmap, pstapriv->aid_bmp_len, dst_ie);
-#endif
 
 		/*copy remainder IE*/
 		if (pbackup_remainder_ie) {
@@ -502,7 +499,7 @@ void	expire_timeout_chk(_adapter *padapter)
 		psta = NULL;
 	}
 
-	_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_lock(pstapriv);
 
 	phead = &pstapriv->asoc_list;
 	plist = get_next(phead);
@@ -676,7 +673,7 @@ void	expire_timeout_chk(_adapter *padapter)
 		}
 	}
 
-	_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_unlock(pstapriv);
 
 	if (chk_alive_num) {
 #if defined(CONFIG_ACTIVE_KEEP_ALIVE_CHECK)
@@ -754,17 +751,10 @@ void	expire_timeout_chk(_adapter *padapter)
 
 			psta->keep_alive_trycnt = 0;
 			del_asoc_list[i] = chk_alive_list[i];
-			_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
-			if (rtw_is_list_empty(&psta->asoc_list) == _FALSE) {
-				rtw_list_delete(&psta->asoc_list);
-				pstapriv->asoc_list_cnt--;
-				#ifdef CONFIG_RTW_TOKEN_BASED_XMIT
-				if (psta->tbtx_enable)
-					pstapriv->tbtx_asoc_list_cnt--;
-				#endif
-				STA_SET_MESH_PLINK(psta, NULL);
-			}
-			_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+			rtw_stapriv_asoc_list_lock(pstapriv);
+			if (rtw_is_list_empty(&psta->asoc_list) == _FALSE)
+				rtw_stapriv_asoc_list_del(pstapriv, psta);
+			rtw_stapriv_asoc_list_unlock(pstapriv);
 		}
 
 		/* delete loop */
@@ -779,7 +769,7 @@ void	expire_timeout_chk(_adapter *padapter)
 
 			RTW_INFO(FUNC_ADPT_FMT" asoc expire "MAC_FMT", state=0x%x\n"
 				, FUNC_ADPT_ARG(padapter), MAC_ARG(psta->cmn.mac_addr), psta->state);
-			updated |= ap_free_sta(padapter, psta, _FALSE, WLAN_REASON_DEAUTH_LEAVING, _FALSE);
+			updated |= ap_free_sta(padapter, psta, _FALSE, 0, WLAN_REASON_DEAUTH_LEAVING, _FALSE);
 			#ifdef CONFIG_RTW_MESH
 			if (MLME_IS_MESH(padapter))
 				rtw_mesh_expire_peer(padapter, sta_addr);
@@ -850,13 +840,12 @@ void rtw_ap_update_sta_ra_info(_adapter *padapter, struct sta_info *psta)
 #ifdef CONFIG_BMC_TX_RATE_SELECT
 u8 rtw_ap_find_mini_tx_rate(_adapter *adapter)
 {
-	_irqL irqL;
 	_list	*phead, *plist;
 	u8 miini_tx_rate = ODM_RATEVHTSS4MCS9, sta_tx_rate;
 	struct sta_info *psta = NULL;
 	struct sta_priv *pstapriv = &adapter->stapriv;
 
-	_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_lock(pstapriv);
 	phead = &pstapriv->asoc_list;
 	plist = get_next(phead);
 	while ((rtw_end_of_queue_search(phead, plist)) == _FALSE) {
@@ -867,7 +856,7 @@ u8 rtw_ap_find_mini_tx_rate(_adapter *adapter)
 		if (sta_tx_rate < miini_tx_rate)
 			miini_tx_rate = sta_tx_rate;
 	}
-	_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_unlock(pstapriv);
 
 	return miini_tx_rate;
 }
@@ -1105,6 +1094,35 @@ void update_sta_info_apmode_ht_bf_cap(_adapter *padapter, struct sta_info *psta)
 }
 #endif /*CONFIG_80211N_HT && CONFIG_BEAMFORMING*/
 
+#ifdef CONFIG_80211N_HT
+void update_sta_bw_apmode(_adapter *padapter, struct sta_info *psta)
+{
+	struct mlme_priv *pmlmepriv = &(padapter->mlmepriv);
+	struct mlme_ext_priv *pmlmeext = &(padapter->mlmeextpriv);
+	struct ht_priv	*phtpriv_ap = &pmlmepriv->htpriv;
+	struct ht_priv	*phtpriv_sta = &psta->htpriv;
+
+	if (phtpriv_sta->ht_option) {
+		if ((phtpriv_sta->ht_cap.cap_info & phtpriv_ap->ht_cap.cap_info) & cpu_to_le16(IEEE80211_HT_CAP_SUP_WIDTH))
+			psta->cmn.bw_mode = CHANNEL_WIDTH_40;
+		else
+			psta->cmn.bw_mode = CHANNEL_WIDTH_20;
+
+		if (phtpriv_sta->op_present
+			&& !GET_HT_OP_ELE_STA_CHL_WIDTH(phtpriv_sta->ht_op))
+			psta->cmn.bw_mode = CHANNEL_WIDTH_20;
+
+		if ((psta->ht_40mhz_intolerant)||(pmlmepriv->sw_to_20mhz))
+			psta->cmn.bw_mode = CHANNEL_WIDTH_20;
+
+		if (pmlmeext->cur_bwmode < psta->cmn.bw_mode)
+			psta->cmn.bw_mode = pmlmeext->cur_bwmode;
+
+		phtpriv_sta->ch_offset = pmlmepriv->sw_to_20mhz ? CHAN_OFFSET_NO_EXT : pmlmeext->cur_ch_offset;
+	}
+}
+#endif /* CONFIG_80211N_HT */
+
 /* notes:
  * AID: 1~MAX for sta and 0 for bc/mc in ap/adhoc mode  */
 void update_sta_info_apmode(_adapter *padapter, struct sta_info *psta)
@@ -1143,24 +1161,7 @@ void update_sta_info_apmode(_adapter *padapter, struct sta_info *psta)
 
 		phtpriv_sta->rx_ampdu_min_spacing = (phtpriv_sta->ht_cap.ampdu_params_info & IEEE80211_HT_CAP_AMPDU_DENSITY) >> 2;
 
-		/* bwmode */
-		if ((phtpriv_sta->ht_cap.cap_info & phtpriv_ap->ht_cap.cap_info) & cpu_to_le16(IEEE80211_HT_CAP_SUP_WIDTH))
-			psta->cmn.bw_mode = CHANNEL_WIDTH_40;
-		else
-			psta->cmn.bw_mode = CHANNEL_WIDTH_20;
-
-		if (phtpriv_sta->op_present
-			&& !GET_HT_OP_ELE_STA_CHL_WIDTH(phtpriv_sta->ht_op))
-			psta->cmn.bw_mode = CHANNEL_WIDTH_20;
-
-		if ((psta->ht_40mhz_intolerant)||(pmlmepriv->sw_to_20mhz))
-			psta->cmn.bw_mode = CHANNEL_WIDTH_20;
-
-		if (pmlmeext->cur_bwmode < psta->cmn.bw_mode)
-			psta->cmn.bw_mode = pmlmeext->cur_bwmode;
-
-		phtpriv_sta->ch_offset = pmlmeext->cur_ch_offset;
-
+		update_sta_bw_apmode(padapter, psta);
 
 		/* check if sta support s Short GI 20M */
 		if ((phtpriv_sta->ht_cap.cap_info & phtpriv_ap->ht_cap.cap_info) & cpu_to_le16(IEEE80211_HT_CAP_SGI_20))
@@ -1297,7 +1298,7 @@ static void update_ap_info(_adapter *padapter, struct sta_info *psta)
 
 static void rtw_set_hw_wmm_param(_adapter *padapter)
 {
-	u8	AIFS, ECWMin, ECWMax, aSifsTime, slottime;
+	u8	AIFS, ECWMin, ECWMax, aSifsTime;
 	u8	acm_mask;
 	u16	TXOP;
 	u32	acParm, i;
@@ -1316,23 +1317,11 @@ static void rtw_set_hw_wmm_param(_adapter *padapter)
 	else
 #endif /* CONFIG_80211N_HT */
 		aSifsTime = 10;
-		
-	if (pmlmeinfo->sifs_override_en == 1) {
-		aSifsTime = pmlmeinfo->sifs_override;
-		RTW_INFO("rtw_set_hw_wmm_param: sifs_override enabled, %d\n", aSifsTime);
-	}
-	
-	if (pmlmeinfo->slottime_override_en == 0) {
-		slottime = pmlmeinfo->slotTime;
-	} else {
-		slottime = pmlmeinfo->slottime_override;
-		RTW_INFO("rtw_set_hw_wmm_param: slottime_override enabled, %d\n", slottime);
-	}
 
 	if (pmlmeinfo->WMM_enable == 0) {
 		padapter->mlmepriv.acm_mask = 0;
 
-		AIFS = aSifsTime + (2 * slottime);
+		AIFS = aSifsTime + (2 * pmlmeinfo->slotTime);
 
 		if (pmlmeext->cur_wireless_mode & (WIRELESS_11G | WIRELESS_11A)) {
 			ECWMin = 4;
@@ -1368,7 +1357,7 @@ static void rtw_set_hw_wmm_param(_adapter *padapter)
 		/* BK */
 		/* AIFS = AIFSN * slot time + SIFS - r2t phy delay */
 #endif
-		AIFS = (7 * slottime) + aSifsTime;
+		AIFS = (7 * pmlmeinfo->slotTime) + aSifsTime;
 		ECWMin = 4;
 		ECWMax = 10;
 		TXOP = 0;
@@ -1378,7 +1367,7 @@ static void rtw_set_hw_wmm_param(_adapter *padapter)
 		RTW_INFO("WMM(BK): %x\n", acParm);
 
 		/* BE */
-		AIFS = (3 * slottime) + aSifsTime;
+		AIFS = (3 * pmlmeinfo->slotTime) + aSifsTime;
 		ECWMin = 4;
 		ECWMax = 6;
 		TXOP = 0;
@@ -1388,7 +1377,7 @@ static void rtw_set_hw_wmm_param(_adapter *padapter)
 		RTW_INFO("WMM(BE): %x\n", acParm);
 
 		/* VI */
-		AIFS = (1 * slottime) + aSifsTime;
+		AIFS = (1 * pmlmeinfo->slotTime) + aSifsTime;
 		ECWMin = 3;
 		ECWMax = 4;
 		TXOP = 94;
@@ -1398,7 +1387,7 @@ static void rtw_set_hw_wmm_param(_adapter *padapter)
 		RTW_INFO("WMM(VI): %x\n", acParm);
 
 		/* VO */
-		AIFS = (1 * slottime) + aSifsTime;
+		AIFS = (1 * pmlmeinfo->slotTime) + aSifsTime;
 		ECWMin = 2;
 		ECWMax = 3;
 		TXOP = 47;
@@ -1697,6 +1686,9 @@ void start_bss_network(_adapter *padapter, struct createbss_parm *parm)
 	u8 chbw_allow = _TRUE;
 	int i;
 	u8 ifbmp_ch_changed = 0;
+#ifdef CONFIG_MCC_MODE
+	u8 start_mcc_ret = NO_NEED_MCC;
+#endif
 
 	if (parm->req_ch != 0) {
 		/* bypass other setting, go checking ch, bw, offset */
@@ -1768,12 +1760,6 @@ void start_bss_network(_adapter *padapter, struct createbss_parm *parm)
 	/* Beacon Control related register */
 	rtw_hal_set_hwreg(padapter, HW_VAR_BEACON_INTERVAL, (u8 *)(&bcn_interval));
 
-#ifdef CONFIG_CHANGE_DTIM_PERIOD
-	/* DTIM period */
-	val8 = _TRUE;
-	rtw_hal_set_hwreg(padapter, HW_VAR_DTIM, (u8 *)(&val8));
-#endif
-
 	rtw_hal_rcr_set_chk_bssid(padapter, mlme_act);
 
 chbw_decision:
@@ -1797,7 +1783,7 @@ chbw_decision:
 			rtw_set_hw_wmm_param(pdvobj->padapters[i]);
 	}
 
-#if defined(CONFIG_DFS_MASTER)
+#if CONFIG_DFS && CONFIG_IEEE80211_BAND_5GHZ
 	rtw_dfs_rd_en_dec_on_mlme_act(padapter, NULL, mlme_act, parm->excl_ifbmp);
 #endif
 
@@ -1826,15 +1812,20 @@ chbw_decision:
 		rtw_hal_set_hwreg(padapter , HW_VAR_DO_IQK , &doiqk);
 	}
 
-	if (set_u_ch)
+	if (set_u_ch
+		#ifdef CONFIG_MCC_MODE
+		|| (MCC_EN(padapter) && chbw_allow == _FALSE)
+		#endif
+	)
 		set_channel_bwmode(padapter, u_ch, u_offset, u_bw);
 
 	doiqk = _FALSE;
 	rtw_hal_set_hwreg(padapter , HW_VAR_DO_IQK , &doiqk);
 
 #ifdef CONFIG_MCC_MODE
+	start_mcc_ret = rtw_hal_set_mcc_setting_start_bss_network(padapter, chbw_allow);
 	/* after set_channel_bwmode for backup IQK */
-	if (rtw_hal_set_mcc_setting_start_bss_network(padapter, chbw_allow) == _FAIL) {
+	if (start_mcc_ret == _FAIL) {
 		/* MCC setting fail, update to buddy's channel */
 		rtw_mi_get_ch_setting_union_no_self(padapter, &u_ch, &u_bw, &u_offset);
 		pnetwork->Configuration.DSConfig = u_ch;
@@ -1855,6 +1846,9 @@ chbw_decision:
 				, padapter->mlmeextpriv.cur_ch_offset
 				, ht_option, 0);
 		}
+	} else if (start_mcc_ret == NO_NEED_MCC) {
+		RTW_INFO(FUNC_ADPT_FMT": NO_NEED_MCC\n"
+				, FUNC_ADPT_ARG(padapter));
 	}
 #endif
 
@@ -1879,7 +1873,7 @@ chbw_decision:
 	}
 #endif /* defined(CONFIG_IOCTL_CFG80211) && (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)) */
 
-	rtw_rfctl_update_op_mode(adapter_to_rfctl(padapter), parm->ifbmp, 1);
+	rtw_rfctl_update_op_mode(adapter_to_rfctl(padapter), parm->ifbmp, 1, parm->excl_ifbmp);
 
 	if (DUMP_ADAPTERS_STATUS) {
 		RTW_INFO(FUNC_ADPT_FMT" done\n", FUNC_ADPT_ARG(padapter));
@@ -3058,14 +3052,13 @@ static void associated_stainfo_update(_adapter *padapter, struct sta_info *psta,
 	RTW_INFO("%s: "MAC_FMT", updated_type=0x%x\n", __func__, MAC_ARG(psta->cmn.mac_addr), sta_info_type);
 #ifdef CONFIG_80211N_HT
 	if (sta_info_type & STA_INFO_UPDATE_BW) {
-
 		if ((psta->flags & WLAN_STA_HT) && !psta->ht_20mhz_set) {
-			if (pmlmepriv->sw_to_20mhz) {
-				psta->cmn.bw_mode = CHANNEL_WIDTH_20;
-				/*psta->htpriv.ch_offset = HAL_PRIME_CHNL_OFFSET_DONT_CARE;*/
-				psta->htpriv.sgi_40m = _FALSE;
-			} else {
-				/*TODO: Switch back to 40MHZ?80MHZ*/
+			if ((pmlmepriv->sw_to_20mhz && psta->cmn.bw_mode != CHANNEL_WIDTH_20)
+				|| (!pmlmepriv->sw_to_20mhz && psta->cmn.bw_mode == CHANNEL_WIDTH_20)
+			) {
+				update_sta_bw_apmode(padapter, psta);
+				psta->cmn.ra_info.is_support_sgi = query_ra_short_GI(psta, rtw_get_tx_bw_mode(padapter, psta));
+				rtw_dm_ra_mask_wk_cmd(padapter, psta);
 			}
 		}
 	}
@@ -3495,7 +3488,15 @@ static u8 update_ecsa_ie(_adapter *padapter, bool *process_ecsa)
 
 static void update_bcn_vendor_spec_ie(_adapter *padapter, u8 *oui)
 {
+
+#ifdef CONFIG_MCC_MODE
+	if (MCC_EN(padapter)) {
+		if (!rtw_hal_check_mcc_status(padapter, MCC_STATUS_DOING_MCC))
+			RTW_INFO("%s\n", __FUNCTION__);
+	}
+#else
 	RTW_INFO("%s\n", __FUNCTION__);
+#endif
 
 	if (_rtw_memcmp(RTW_WPA_OUI, oui, 4))
 		update_bcn_wpa_ie(padapter);
@@ -3670,19 +3671,8 @@ void rtw_process_public_act_bsscoex(_adapter *padapter, u8 *pframe, uint frame_l
 	}
 
 	if (beacon_updated) {
-
 		update_beacon(padapter, _HT_ADD_INFO_IE_, NULL, _TRUE, 0);
-
-		associated_stainfo_update(padapter, psta, STA_INFO_UPDATE_BW);
-		if (pmlmepriv->sw_to_20mhz) {
-			for (i = 0; i < MACID_NUM_SW_LIMIT; i++) {
-				psta = macid_ctl->sta[i];
-				if (psta && !is_broadcast_mac_addr(psta->cmn.mac_addr)) {
-					psta->cmn.bw_mode = CHANNEL_WIDTH_20;
-					rtw_dm_ra_mask_wk_cmd(padapter, (u8 *)psta);
-				}
-			}
-		}
+		associated_clients_update(padapter, _TRUE, STA_INFO_UPDATE_BW);
 	}
 }
 
@@ -3804,12 +3794,11 @@ void associated_clients_update(_adapter *padapter, u8 updated, u32 sta_info_type
 {
 	/* update associcated stations cap. */
 	if (updated == _TRUE) {
-		_irqL irqL;
 		_list	*phead, *plist;
 		struct sta_info *psta = NULL;
 		struct sta_priv *pstapriv = &padapter->stapriv;
 
-		_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+		rtw_stapriv_asoc_list_lock(pstapriv);
 
 		phead = &pstapriv->asoc_list;
 		plist = get_next(phead);
@@ -3823,7 +3812,7 @@ void associated_clients_update(_adapter *padapter, u8 updated, u32 sta_info_type
 			associated_stainfo_update(padapter, psta, sta_info_type);
 		}
 
-		_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+		rtw_stapriv_asoc_list_unlock(pstapriv);
 
 	}
 
@@ -4094,6 +4083,7 @@ u8 bss_cap_update_on_sta_leave(_adapter *padapter, struct sta_info *psta)
 	if (rtw_ht_operation_update(padapter) > 0) {
 		update_beacon(padapter, _HT_CAPABILITY_IE_, NULL, _FALSE, 0);
 		update_beacon(padapter, _HT_ADD_INFO_IE_, NULL, _FALSE, 0);
+		beacon_updated = _TRUE;
 	}
 #endif /* CONFIG_80211N_HT */
 
@@ -4120,7 +4110,7 @@ u8 bss_cap_update_on_sta_leave(_adapter *padapter, struct sta_info *psta)
 
 }
 
-u8 ap_free_sta(_adapter *padapter, struct sta_info *psta, bool active, u16 reason, bool enqueue)
+u8 ap_free_sta(_adapter *padapter, struct sta_info *psta, bool active, u8 subtype, u16 reason, bool enqueue)
 {
 	_irqL irqL;
 	u8 beacon_updated = _FALSE;
@@ -4138,8 +4128,12 @@ u8 ap_free_sta(_adapter *padapter, struct sta_info *psta, bool active, u16 reaso
 
 #endif /* CONFIG_80211N_HT */
 
-		if (!MLME_IS_MESH(padapter))
-			issue_deauth(padapter, psta->cmn.mac_addr, reason);
+		if (!MLME_IS_MESH(padapter)) {
+			if (subtype == RTW_IEEE80211_STYPE_DISASSOC >> 4)
+				issue_disasoc(padapter, psta->cmn.mac_addr, reason);
+			else /* if not specified or not valid, use deauth by default */
+				issue_deauth(padapter, psta->cmn.mac_addr, reason);
+		}
 
 		/* Flush buffered management frames */
 		if (psta->state & WIFI_SLEEP_STATE)
@@ -4205,45 +4199,8 @@ u8 ap_free_sta(_adapter *padapter, struct sta_info *psta, bool active, u16 reaso
 	return beacon_updated;
 }
 
-int rtw_ap_inform_ch_switch(_adapter *padapter, u8 new_ch, u8 ch_offset)
-{
-	_irqL irqL;
-	_list	*phead, *plist;
-	int ret = 0;
-	struct sta_info *psta = NULL;
-	struct sta_priv *pstapriv = &padapter->stapriv;
-	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;
-	struct mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
-	u8 bc_addr[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
-	if ((pmlmeinfo->state & 0x03) != WIFI_FW_AP_STATE)
-		return ret;
-
-	RTW_INFO(FUNC_NDEV_FMT" with ch:%u, offset:%u\n",
-		 FUNC_NDEV_ARG(padapter->pnetdev), new_ch, ch_offset);
-
-	_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
-	phead = &pstapriv->asoc_list;
-	plist = get_next(phead);
-
-	/* for each sta in asoc_queue */
-	while ((rtw_end_of_queue_search(phead, plist)) == _FALSE) {
-		psta = LIST_CONTAINOR(plist, struct sta_info, asoc_list);
-		plist = get_next(plist);
-
-		issue_action_spct_ch_switch(padapter, psta->cmn.mac_addr, new_ch, ch_offset);
-		psta->expire_to = ((pstapriv->expire_to * 2) > 5) ? 5 : (pstapriv->expire_to * 2);
-	}
-	_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
-
-	issue_action_spct_ch_switch(padapter, bc_addr, new_ch, ch_offset);
-
-	return ret;
-}
-
 int rtw_sta_flush(_adapter *padapter, bool enqueue)
 {
-	_irqL irqL;
 	_list	*phead, *plist;
 	int ret = 0;
 	struct sta_info *psta = NULL;
@@ -4259,7 +4216,7 @@ int rtw_sta_flush(_adapter *padapter, bool enqueue)
 	RTW_INFO(FUNC_NDEV_FMT"\n", FUNC_NDEV_ARG(padapter->pnetdev));
 
 	/* pick sta from sta asoc_queue */
-	_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_lock(pstapriv);
 	phead = &pstapriv->asoc_list;
 	plist = get_next(phead);
 	while ((rtw_end_of_queue_search(phead, plist)) == _FALSE) {
@@ -4268,13 +4225,7 @@ int rtw_sta_flush(_adapter *padapter, bool enqueue)
 		psta = LIST_CONTAINOR(plist, struct sta_info, asoc_list);
 		plist = get_next(plist);
 
-		rtw_list_delete(&psta->asoc_list);
-		pstapriv->asoc_list_cnt--;
-		#ifdef CONFIG_RTW_TOKEN_BASED_XMIT
-		if (psta->tbtx_enable)
-			pstapriv->tbtx_asoc_list_cnt--;
-		#endif
-		STA_SET_MESH_PLINK(psta, NULL);
+		rtw_stapriv_asoc_list_del(pstapriv, psta);
 
 		stainfo_offset = rtw_stainfo_offset(pstapriv, psta);
 		if (stainfo_offset_valid(stainfo_offset))
@@ -4282,7 +4233,7 @@ int rtw_sta_flush(_adapter *padapter, bool enqueue)
 		else
 			rtw_warn_on(1);
 	}
-	_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_unlock(pstapriv);
 
 	/* call ap_free_sta() for each sta picked */
 	for (i = 0; i < flush_num; i++) {
@@ -4291,7 +4242,7 @@ int rtw_sta_flush(_adapter *padapter, bool enqueue)
 		psta = rtw_get_stainfo_by_offset(pstapriv, flush_list[i]);
 		_rtw_memcpy(sta_addr, psta->cmn.mac_addr, ETH_ALEN);
 
-		ap_free_sta(padapter, psta, _TRUE, WLAN_REASON_DEAUTH_LEAVING, enqueue);
+		ap_free_sta(padapter, psta, _TRUE, 0, WLAN_REASON_DEAUTH_LEAVING, enqueue);
 		#ifdef CONFIG_RTW_MESH
 		if (MLME_IS_MESH(padapter))
 			rtw_mesh_expire_peer(padapter, sta_addr);
@@ -4364,7 +4315,6 @@ void rtw_ap_restore_network(_adapter *padapter)
 	struct sta_priv *pstapriv = &padapter->stapriv;
 	struct sta_info *psta;
 	struct security_priv *psecuritypriv = &(padapter->securitypriv);
-	_irqL irqL;
 	_list	*phead, *plist;
 	u8 chk_alive_num = 0;
 	char chk_alive_list[NUM_STA];
@@ -4385,7 +4335,7 @@ void rtw_ap_restore_network(_adapter *padapter)
 		rtw_set_key(padapter, psecuritypriv, psecuritypriv->dot118021XGrpKeyid, 0, _FALSE);
 	}
 
-	_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_lock(pstapriv);
 
 	phead = &pstapriv->asoc_list;
 	plist = get_next(phead);
@@ -4401,7 +4351,7 @@ void rtw_ap_restore_network(_adapter *padapter)
 			chk_alive_list[chk_alive_num++] = stainfo_offset;
 	}
 
-	_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_unlock(pstapriv);
 
 	for (i = 0; i < chk_alive_num; i++) {
 		psta = rtw_get_stainfo_by_offset(pstapriv, chk_alive_list[i]);
@@ -4519,7 +4469,7 @@ void stop_ap_mode(_adapter *padapter)
 	padapter->securitypriv.ndisauthtype = Ndis802_11AuthModeOpen;
 	padapter->securitypriv.ndisencryptstatus = Ndis802_11WEPDisabled;
 
-	rtw_rfctl_update_op_mode(adapter_to_rfctl(padapter), BIT(padapter->iface_id), 0);
+	rtw_rfctl_update_op_mode(adapter_to_rfctl(padapter), BIT(padapter->iface_id), 0, 0);
 
 	/* free scan queue */
 	rtw_free_network_queue(padapter, _TRUE);
@@ -4594,6 +4544,10 @@ void stop_ap_mode(_adapter *padapter)
 	rtw_btcoex_MediaStatusNotify(padapter, 0); /* disconnect */
 #endif
 
+#ifdef CONFIG_DFS_MASTER
+	rtw_indicate_cac_state_on_bss_stop(padapter);
+#endif
+
 #ifdef CONFIG_RTW_WDS
 	if (MLME_IS_AP(padapter))
 		rtw_wds_pathtbl_unregister(padapter);
@@ -4603,13 +4557,6 @@ void stop_ap_mode(_adapter *padapter)
 	/* Disable beacon early interrupt IMR of AP mode */
 	rtw_hal_set_ap_bcn_imr_cmd(padapter, 0);
 #endif
-#ifdef CONFIG_CHANGE_DTIM_PERIOD
-	if (self_action == MLME_AP_STOPPED) {
-		/* DTIM period */
-		u8 val8 = _FALSE;
-		rtw_hal_set_hwreg(padapter, HW_VAR_DTIM, (u8 *)(&val8));
-	}
-#endif
 }
 
 #endif /* CONFIG_NATIVEAP_MLME */
@@ -4617,15 +4564,16 @@ void stop_ap_mode(_adapter *padapter)
 static void rtw_csa_ap_update_sta_rainfo(_adapter *adapter,
 	struct sta_info *psta, const struct sta_info *ap_self_psta)
 {
+	#ifdef CONFIG_80211AC_VHT
+	u8 vht_enable = ap_self_psta->vhtpriv.vht_option;
+	#endif
+
 	psta->cmn.bw_mode = adapter->mlmeextpriv.cur_bwmode;
 	psta->htpriv.ch_offset = adapter->mlmeextpriv.cur_ch_offset;
-#ifdef CONFIG_80211AC_VHT
-	if (ap_self_psta) {
-		psta->vhtpriv.vht_option = ap_self_psta->vhtpriv.vht_option;
-		psta->cmn.ra_info.is_vht_enable =
-			ap_self_psta->vhtpriv.vht_option;
-	}
-#endif
+	#ifdef CONFIG_80211AC_VHT
+	psta->vhtpriv.vht_option = vht_enable;
+	psta->cmn.ra_info.is_vht_enable = vht_enable;
+	#endif
 }
 
 void rtw_csa_update_clients_ramask(_adapter *adapter)
@@ -4653,7 +4601,7 @@ void rtw_csa_update_clients_ramask(_adapter *adapter)
 			if (psta && psta != ap_self_psta && psta != bmc_psta) {
 				rtw_csa_ap_update_sta_rainfo(adapter, psta, ap_self_psta);
 				/* update RA mask */
-				rtw_dm_ra_mask_wk_cmd(adapter, (u8 *)psta);
+				rtw_dm_ra_mask_wk_cmd(adapter, psta);
 			}
 		}
 	}
@@ -4839,15 +4787,8 @@ static u8 rtw_ap_update_chbw_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp
 				|| mlmeext->cur_ch_offset != dec_offset[i])
 		) {
 			if (rtw_linked_check(iface) == _TRUE) {
-				#ifdef CONFIG_SPCT_CH_SWITCH
-				if (1)
-					rtw_ap_inform_ch_switch(iface, dec_ch[i], dec_offset[i]);
-				else
-				#endif
-				{
-					if(rfctl->ap_csa_en == AP_CSA_DISABLE)
-						rtw_sta_flush(iface, _FALSE);
-				}
+				if (rfctl->ap_csa_en == AP_CSA_DISABLE)
+					rtw_sta_flush(iface, _FALSE);
 			}
 		}
 
@@ -5116,7 +5057,7 @@ u8 rtw_ap_chbw_decision(_adapter *adapter, u8 ifbmp, u8 excl_ifbmp
 
 	} else {
 		/* autonomous decision */
-		u8 ori_ch = 0;
+		u8 ori_ch = 0, ori_offset = CHAN_OFFSET_NO_EXT;
 		u8 max_bw;
 		bool by_int_info;
 
@@ -5195,20 +5136,35 @@ choose_chbw:
 			}
 
 			if (MSTATE_AP_NUM(&mstate) || MSTATE_MESH_NUM(&mstate)) {
-				if (ori_ch == 0)
+				if (ori_ch == 0) {
 					ori_ch = mlmeext->cur_channel;
-				else if (ori_ch != mlmeext->cur_channel)
+					ori_offset = mlmeext->cur_ch_offset;
+				} else if (ori_ch != mlmeext->cur_channel) {
 					rtw_warn_on(1);
+				} else if (mlmeext->cur_ch_offset != CHAN_OFFSET_NO_EXT) {
+					if (ori_offset == CHAN_OFFSET_NO_EXT)
+						ori_offset = mlmeext->cur_ch_offset;
+					else if (ori_offset != mlmeext->cur_ch_offset)
+						rtw_warn_on(1);
+				}
 			} else {
-				if (ori_ch == 0)
+				if (ori_ch == 0) {
 					ori_ch = cur_ie_ch[i];
-				else if (ori_ch != cur_ie_ch[i])
+					ori_offset = cur_ie_offset[i];
+				} else if (ori_ch != cur_ie_ch[i]) {
 					rtw_warn_on(1);
+				} else if (cur_ie_offset[i] != CHAN_OFFSET_NO_EXT) {
+					if (ori_offset == CHAN_OFFSET_NO_EXT)
+						ori_offset = cur_ie_offset[i];
+					else if (ori_offset != cur_ie_offset[i])
+						rtw_warn_on(1);
+				}
 			}
 		}
+		req_offset = req_offset > REQ_OFFSET_NONE ? req_offset : CHAN_OFFSET_NO_EXT;
 
-		ch_avail = rtw_rfctl_choose_chbw(rfctl, req_ch, max_bw
-			, ori_ch, &u_ch, &u_bw, &u_offset, by_int_info, ifbmp_all_mesh, __func__);
+		ch_avail = rtw_rfctl_choose_chbw(rfctl, req_ch, max_bw, req_offset
+			, ori_ch, ori_offset, &u_ch, &u_bw, &u_offset, by_int_info, ifbmp_all_mesh, __func__);
 		if (ch_avail == _FALSE)
 			goto exit;
 
@@ -5264,7 +5220,6 @@ u8 rtw_ap_sta_states_check(_adapter *adapter)
 	struct sta_info *psta;
 	struct sta_priv *pstapriv = &adapter->stapriv;
 	_list *plist, *phead;
-	_irqL irqL;
 	u8 rst = _FALSE;
 
 	if (!MLME_IS_AP(adapter) && !MLME_IS_MESH(adapter))
@@ -5273,7 +5228,7 @@ u8 rtw_ap_sta_states_check(_adapter *adapter)
 	if (pstapriv->auth_list_cnt !=0)
 		return _TRUE;
 
-	_enter_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_lock(pstapriv);
 	phead = &pstapriv->asoc_list;
 	plist = get_next(phead);
 	while ((rtw_end_of_queue_search(phead, plist)) == _FALSE) {
@@ -5291,7 +5246,7 @@ u8 rtw_ap_sta_states_check(_adapter *adapter)
 			break;
 		}
 	}
-	_exit_critical_bh(&pstapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_unlock(pstapriv);
 	return rst;
 }
 
@@ -5848,7 +5803,6 @@ static bool rtw_ap_data_bmc_to_uc(_adapter *adapter
 {
 	struct sta_priv *stapriv = &adapter->stapriv;
 	struct xmit_priv *xmitpriv = &adapter->xmitpriv;
-	_irqL irqL;
 	_list *head, *list;
 	struct sta_info *sta;
 	char b2u_sta_id[NUM_STA];
@@ -5856,7 +5810,7 @@ static bool rtw_ap_data_bmc_to_uc(_adapter *adapter
 	bool bmc_need = _FALSE;
 	int i;
 
-	_enter_critical_bh(&stapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_lock(stapriv);
 	head = &stapriv->asoc_list;
 	list = get_next(head);
 
@@ -5870,7 +5824,7 @@ static bool rtw_ap_data_bmc_to_uc(_adapter *adapter
 		if (stainfo_offset_valid(stainfo_offset))
 			b2u_sta_id[b2u_sta_num++] = stainfo_offset;
 	}
-	_exit_critical_bh(&stapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_unlock(stapriv);
 
 	if (!b2u_sta_num)
 		goto exit;
@@ -5946,14 +5900,13 @@ static void rtw_ap_data_flood_for_unknown_da(_adapter *adapter
 {
 	struct sta_priv *stapriv = &adapter->stapriv;
 	struct xmit_priv *xmitpriv = &adapter->xmitpriv;
-	_irqL irqL;
 	_list *head, *list;
 	struct sta_info *sta;
 	char sta_id[NUM_STA];
 	u8 sta_num = 0;
 	int i;
 
-	_enter_critical_bh(&stapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_lock(stapriv);
 	head = &stapriv->asoc_list;
 	list = get_next(head);
 
@@ -5967,7 +5920,7 @@ static void rtw_ap_data_flood_for_unknown_da(_adapter *adapter
 		if (stainfo_offset_valid(stainfo_offset))
 			sta_id[sta_num++] = stainfo_offset;
 	}
-	_exit_critical_bh(&stapriv->asoc_list_lock, &irqL);
+	rtw_stapriv_asoc_list_unlock(stapriv);
 
 	if (!sta_num)
 		goto exit;

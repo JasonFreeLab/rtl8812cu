@@ -69,6 +69,10 @@ rtw_hal_dfs_rd_enable_with_sp_chbw(struct hal_com_data *hal_data, enum phl_band_
 	, bool cac, u8 sp_ch, enum channel_width sp_bw, enum chan_offset sp_offset);
 
 int
+rtw_hal_dfs_rd_enable_with_sp_freq_range(struct hal_com_data *hal_data, enum phl_band_idx hw_band
+	, bool cac, u32 sp_freq_hi, u32 sp_freq_lo);
+
+int
 rtw_hal_dfs_rd_set_cac_status(struct hal_com_data *hal_data, enum phl_band_idx hw_band, bool cac);
 
 int

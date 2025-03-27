@@ -29,12 +29,10 @@
 /* 2019.08.20: modify code structure*/
 #define HW_SETTING_VERSION_8822C "1.1"
 
-#if 0
 enum phydm_bf_linked {
 	PHYDM_IS_BF_LINKED	= 1,
 	PHYDM_NO_BF_LINKED	= 2,
 };
-#endif
 
 void phydm_hwsetting_8822c(struct dm_struct *dm);
 #endif

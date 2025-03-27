@@ -16,23 +16,24 @@
 #define __OSDEP_SERVICE_H_
 
 
-#define _FAIL					0
-#define _SUCCESS				1
-#define RTW_RX_HANDLED			2
-#define RTW_RFRAME_UNAVAIL		3
+#define _FAIL			0
+#define _SUCCESS		1
+#define RTW_RX_HANDLED		2
+#define RTW_RFRAME_UNAVAIL	3
 #define RTW_RFRAME_PKT_UNAVAIL	4
-#define RTW_RBUF_UNAVAIL		5
+#define RTW_RBUF_UNAVAIL	5
 #define RTW_RBUF_PKT_UNAVAIL	6
 #define RTW_SDIO_READ_PORT_FAIL	7
-#define RTW_ALREADY				8
-#define RTW_RA_RESOLVING		9
-#define RTW_ORI_NO_NEED			10
-#define RTW_XBUF_UNAVAIL		11
-#define RTW_TX_BALANCE			12
+#define RTW_ALREADY		8
+#define RTW_RA_RESOLVING	9
+#define RTW_ORI_NO_NEED		10
+#define RTW_XBUF_UNAVAIL	11
+#define RTW_TX_BALANCE		12
 #define RTW_TX_WAIT_MORE_FRAME	13
-#define RTW_QUEUE_MGMT			14
-#define RTW_NOT_SUPPORT			15
-#define RTW_BUSY				16
+#define RTW_QUEUE_MGMT		14
+#define RTW_NOT_SUPPORT		15
+#define RTW_BUSY		16
+#define RTW_ABORT_LINKING	17
 
 /* #define RTW_STATUS_TIMEDOUT -110 */
 
@@ -371,6 +372,7 @@ extern s32	_rtw_get_passing_time_ms(systime start);
 extern s32 _rtw_get_remaining_time_ms(systime end);
 extern s32	_rtw_get_time_interval_ms(systime start, systime end);
 extern bool _rtw_time_after(systime a, systime b);
+extern bool _rtw_time_after_eq(systime a, systime b);
 
 #ifdef DBG_SYSTIME
 #define rtw_get_current_time() ({systime __stime = _rtw_get_current_time(); __stime;})
@@ -380,8 +382,10 @@ extern bool _rtw_time_after(systime a, systime b);
 #define rtw_get_passing_time_ms(start) ({u32 __ms = _rtw_get_passing_time_ms(start); typecheck(systime, start); __ms;})
 #define rtw_get_remaining_time_ms(end) ({u32 __ms = _rtw_get_remaining_time_ms(end); typecheck(systime, end); __ms;})
 #define rtw_get_time_interval_ms(start, end) ({u32 __ms = _rtw_get_time_interval_ms(start, end); typecheck(systime, start); typecheck(systime, end); __ms;})
-#define rtw_time_after(a,b) ({bool __r = _rtw_time_after(a,b); typecheck(systime, a); typecheck(systime, b); __r;})
-#define rtw_time_before(a,b) ({bool __r = _rtw_time_after(b, a); typecheck(systime, a); typecheck(systime, b); __r;})
+#define rtw_time_after(a, b) ({bool __r = _rtw_time_after(a, b); typecheck(systime, a); typecheck(systime, b); __r;})
+#define rtw_time_after_eq(a, b) ({bool __r = _rtw_time_after_eq(a, b); typecheck(systime, a); typecheck(systime, b); __r;})
+#define rtw_time_before(a, b) ({bool __r = _rtw_time_after(b, a); typecheck(systime, a); typecheck(systime, b); __r;})
+#define rtw_time_before_eq(a, b) ({bool __r = _rtw_time_after_eq(b, a); typecheck(systime, a); typecheck(systime, b); __r;})
 #else
 #define rtw_get_current_time() _rtw_get_current_time()
 #define rtw_systime_to_ms(stime) _rtw_systime_to_ms(stime)
@@ -390,8 +394,10 @@ extern bool _rtw_time_after(systime a, systime b);
 #define rtw_get_passing_time_ms(start) _rtw_get_passing_time_ms(start)
 #define rtw_get_remaining_time_ms(end) _rtw_get_remaining_time_ms(end)
 #define rtw_get_time_interval_ms(start, end) _rtw_get_time_interval_ms(start, end)
-#define rtw_time_after(a,b) _rtw_time_after(a,b)
-#define rtw_time_before(a,b) _rtw_time_after(b,a)
+#define rtw_time_after(a, b) _rtw_time_after(a, b)
+#define rtw_time_after_eq(a, b) _rtw_time_after(a, b)
+#define rtw_time_before(a, b) _rtw_time_after(b, a)
+#define rtw_time_before_eq(a, b) _rtw_time_after_eq(b, a)
 #endif
 
 sysptime rtw_sptime_get(void);
@@ -676,8 +682,49 @@ static inline int largest_bit_64(u64 bitmask)
 #define rtw_abs(a) ((a) < 0 ? -(a) : (a))
 #define rtw_min(a, b) (((a) > (b)) ? (b) : (a))
 #define rtw_max(a, b) (((a) > (b)) ? (a) : (b))
-#define rtw_is_range_a_in_b(hi_a, lo_a, hi_b, lo_b) (((hi_a) <= (hi_b)) && ((lo_a) >= (lo_b)))
-#define rtw_is_range_overlap(hi_a, lo_a, hi_b, lo_b) (((hi_a) > (lo_b)) && ((lo_a) < (hi_b)))
+
+#define rtw_is_range_empty(hi, lo) ((hi) == (lo))
+#define rtw_is_range_a_in_b(a_hi, a_lo, b_hi, b_lo) (((a_hi) <= (b_hi)) && ((a_lo) >= (b_lo)))
+#define rtw_is_range_adjacent(a_hi, a_lo, b_hi, b_lo) (((a_hi) == (b_lo)) || ((a_lo) == (b_hi)))
+#define rtw_is_range_overlap(a_hi, a_lo, b_hi, b_lo) (((a_hi) > (b_lo)) && ((a_lo) < (b_hi)))
+
+/*
+* Combine two ranges if possible (hilo_s is empty or adjcent/overlap with hilo)
+* @hi_s, @lo_s: range parameters to store combined range
+* @hi, @lo: range parameters to be combined, if combined, set to 0 (empty)
+*/
+#define rtw_range_combine(hi_s, lo_s, hi, lo) \
+	do { \
+		if (rtw_is_range_empty(hi, lo)) {} \
+		else if (rtw_is_range_empty(hi_s, lo_s)) { \
+			(hi_s) = (hi); \
+			(lo_s) = (lo); \
+			(hi) = 0; (lo) = 0; \
+		} else if (rtw_is_range_adjacent(hi_s, lo_s, hi, lo) \
+			|| rtw_is_range_overlap(hi_s, lo_s, hi, lo) \
+		) { \
+			(hi_s) = rtw_max(hi_s, hi); \
+			(lo_s) = rtw_min(lo_s, lo); \
+			(hi) = 0; (lo) = 0; \
+		} \
+	} while (0)
+
+/*
+* Merge two ranges (no need to adjcent/overlap with each other)
+* @hi_s, @lo_s: range parameters to store merged range
+* @hi, @lo: range parameters to be merged
+*/
+#define rtw_range_merge(hi_s, lo_s, hi, lo) \
+	do { \
+		if (rtw_is_range_empty(hi, lo)) {} \
+		else if (rtw_is_range_empty(hi_s, lo_s)) { \
+			(hi_s) = (hi); \
+			(lo_s) = (lo); \
+		} else { \
+			(hi_s) = rtw_max(hi_s, hi); \
+			(lo_s) = rtw_min(lo_s, lo); \
+		} \
+	} while (0)
 
 #ifndef MAC_FMT
 #define MAC_FMT "%02x:%02x:%02x:%02x:%02x:%02x"

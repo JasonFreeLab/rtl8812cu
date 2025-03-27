@@ -15,16 +15,9 @@
 #ifndef __RTW_CMD_H_
 #define __RTW_CMD_H_
 
-
 #define C2H_MEM_SZ (16*1024)
 
-#define FREE_CMDOBJ_SZ	128
-
-#define MAX_CMDSZ	1536
-#define MAX_RSPSZ	512
 #define MAX_EVTSZ	1024
-
-#define CMDBUFF_ALIGN_SZ 512
 
 struct cmd_obj {
 	_adapter *padapter;
@@ -35,6 +28,14 @@ struct cmd_obj {
 	u8	*rsp;
 	u32	rspsz;
 	struct submit_ctx *sctx;
+	/*
+	* buffer allocated by handler/callback in cmd_thread, will
+	* 1. got and accessed by caller or
+	* 2. freed by .sctx_rsp_buf_free when caller timeout
+	*/
+	void *sctx_rsp_buf;
+	/* set to function to free sctx_rsp_buf when caller is timeout */
+	void (*sctx_rsp_buf_free)(void *);
 	u8 no_io;
 	/* _sema 	cmd_sem; */
 	_list	list;
@@ -55,15 +56,10 @@ struct cmd_priv {
 
 	_queue	cmd_queue;
 	u8	cmd_seq;
-	u8	*cmd_buf;	/* shall be non-paged, and 4 bytes aligned */
-	u8	*cmd_allocated_buf;
-	u8	*rsp_buf;	/* shall be non-paged, and 4 bytes aligned		 */
-	u8	*rsp_allocated_buf;
 	u32	cmd_issued_cnt;
 	u32	cmd_done_cnt;
 	u32	rsp_cnt;
 	ATOMIC_T cmdthd_running;
-	/* u8 cmdthd_running; */
 
 	_adapter *padapter;
 	_mutex sctx_mutex;
@@ -181,7 +177,6 @@ extern void rtw_free_cmd_priv(struct cmd_priv *pcmdpriv);
 
 extern u32 rtw_init_evt_priv(struct evt_priv *pevtpriv);
 extern void rtw_free_evt_priv(struct evt_priv *pevtpriv);
-extern void rtw_cmd_clr_isr(struct cmd_priv *pcmdpriv);
 extern void rtw_evt_notify_isr(struct evt_priv *pevtpriv);
 #ifdef CONFIG_P2P
 u8 p2p_protocol_wk_cmd(_adapter *padapter, int intCmdType);
@@ -219,6 +214,7 @@ enum rtw_drvextra_cmd_id {
 	NONE_WK_CID,
 	STA_MSTATUS_RPT_WK_CID,
 	DYNAMIC_CHK_WK_CID,
+	DYNAMIC_CHK_IDLE_WK_CID,
 	DM_CTRL_WK_CID,
 	PBC_POLLING_WK_CID,
 	POWER_SAVING_CTRL_WK_CID,/* IPS,AUTOSuspend */
@@ -603,6 +599,7 @@ Result:
 #define H2C_ENQ_HEAD			0x08
 #define H2C_ENQ_HEAD_FAIL		0x09
 #define H2C_CMD_FAIL			0x0A
+#define H2C_MEMORY			0x0B
 
 void rtw_init_sitesurvey_parm(_adapter *padapter, struct sitesurvey_parm *pparm);
 u8 rtw_sitesurvey_cmd(_adapter *padapter, struct sitesurvey_parm *pparm);
@@ -611,10 +608,11 @@ u8 rtw_create_ibss_cmd(_adapter *adapter, int flags);
 u8 rtw_startbss_cmd(_adapter *adapter, int flags);
 #endif
 
-#define REQ_CH_NONE		-1
+#define REQ_BAND_NONE	-1
+#define REQ_CH_NONE	-1
 #define REQ_CH_INT_INFO	-2
-#define REQ_BW_NONE		-1
-#define REQ_BW_ORI		-2
+#define REQ_BW_NONE	-1
+#define REQ_BW_ORI	-2
 #define REQ_OFFSET_NONE	-1
 
 struct sta_info;
@@ -626,6 +624,8 @@ u8 rtw_disassoc_cmd(_adapter *padapter, u32 deauth_timeout_ms, int flags);
 #ifdef CONFIG_AP_MODE
 u8 rtw_change_bss_chbw_cmd(_adapter *adapter, int flags
 	, u8 ifbmp, u8 excl_ifbmp, s16 req_ch, s8 req_bw, s8 req_offset);
+u8 rtw_change_bss_bchbw_cmd(_adapter *adapter, int flags
+	, u32 iflbmp, u32 excl_iflbmp, s8 req_band, s16 req_ch, s8 req_bw, s8 req_offset);
 u8 rtw_stop_ap_cmd(_adapter *adapter, u8 flags);
 #endif
 #ifdef CONFIG_RTW_TOKEN_BASED_XMIT
@@ -639,6 +639,7 @@ extern u8 rtw_addbarsp_cmd(_adapter *padapter, u8 *addr, u16 tid, u8 status, u8 
 extern u8 rtw_reset_securitypriv_cmd(_adapter *padapter);
 extern u8 rtw_free_assoc_resources_cmd(_adapter *padapter, u8 lock_scanned_queue, int flags);
 extern u8 rtw_dynamic_chk_wk_cmd(_adapter *adapter);
+u8 rtw_dynamic_chk_idle_wk_cmd(struct dvobj_priv *dvobj, bool direct);
 
 u8 rtw_lps_ctrl_wk_cmd(_adapter *padapter, u8 lps_ctrl_type, u8 flags);
 u8 rtw_lps_ctrl_leave_set_level_cmd(_adapter *adapter, u8 lps_level, u8 flags);
@@ -656,7 +657,7 @@ u8 rtw_rpt_timer_cfg_cmd(_adapter *padapter, u16 minRptTime);
 extern  u8 rtw_antenna_select_cmd(_adapter *padapter, u8 antenna, u8 enqueue);
 #endif
 
-u8 rtw_dm_ra_mask_wk_cmd(_adapter *padapter, u8 *psta);
+u8 rtw_dm_ra_mask_wk_cmd(_adapter *padapter, struct sta_info *psta);
 
 u8 rtw_ips_ctrl_wk_cmd(_adapter *padapter, u8 ips_ctrl_type, u8 ips_mode, u8 flags);
 
@@ -759,7 +760,6 @@ u8 rtw_drvextra_cmd_hdl(_adapter *padapter, unsigned char *pbuf);
 
 extern void rtw_survey_cmd_callback(_adapter  *padapter, struct cmd_obj *pcmd);
 extern void rtw_disassoc_cmd_callback(_adapter  *padapter, struct cmd_obj *pcmd);
-extern void rtw_joinbss_cmd_callback(_adapter  *padapter, struct cmd_obj *pcmd);
 void rtw_create_ibss_post_hdl(_adapter *padapter, int status);
 extern void rtw_readtssi_cmdrsp_callback(_adapter	*padapter,  struct cmd_obj *pcmd);
 

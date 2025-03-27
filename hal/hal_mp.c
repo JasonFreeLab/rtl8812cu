@@ -478,10 +478,8 @@ mpt_SetTxPower(
 		};
 		if (tx_nss == 4)
 			MaxRate = MGN_MCS31;
-#if 0 /* Execution cannot reach this statemen */
 		else if (tx_nss == 3)
 			MaxRate = MGN_MCS23;
-#endif
 		else if (tx_nss == 2)
 			MaxRate = MGN_MCS15;
 		else
@@ -509,10 +507,8 @@ mpt_SetTxPower(
 		};
 		if (tx_nss == 4)
 			MaxRate = MGN_VHT4SS_MCS9;
-#if 0 /* Execution cannot reach this statemen */
 		else if (tx_nss == 3)
 			MaxRate = MGN_VHT3SS_MCS9;
-#endif
 		else if (tx_nss == 2)
 			MaxRate = MGN_VHT2SS_MCS9;
 		else
@@ -946,7 +942,7 @@ mpt_SetSingleTone_8814A(
 
 		if (bEnPMacTx == FALSE) {
 			hal_mpt_SetContinuousTx(pAdapter, _TRUE);
-			issue_nulldata(pAdapter, NULL, 1, 3, 500);
+			issue_nulldata(pAdapter, NULL, 1, 3, PS_ANNC_DRV_RETRY_INT_MS);
 		}
 
 		phy_set_bb_reg(pAdapter, rCCAonSec_Jaguar, BIT1, 0x1); /*/ Disable CCA*/

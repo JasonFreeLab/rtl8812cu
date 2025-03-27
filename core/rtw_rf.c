@@ -54,18 +54,13 @@ u8 op_chs_of_cch_2g_40m[CENTER_CH_2G_40M_NUM][2] = {
 
 #if CONFIG_IEEE80211_BAND_5GHZ
 u8 center_ch_5g_all[CENTER_CH_5G_ALL_NUM] = {
-	16, 20, 22, 24, 
-	26, 28, 30, 32, 
-	
-/* G00 */36, 38, 40, 42,
+/* G00 */36, 38, 40,
+	42,
 /* G01 */44, 46, 48,
 	/* 50, */
 /* G02 */52, 54, 56,
 	58,
 /* G03 */60, 62, 64,
-
-	68, 70, 72, 74, 76, 78, 80, 84, 86, 88, 90, 92, 94, 96,  
-	
 /* G04 */100, 102, 104,
 	106,
 /* G05 */108, 110, 112,
@@ -82,21 +77,14 @@ u8 center_ch_5g_all[CENTER_CH_5G_ALL_NUM] = {
 	/* 163, */
 /* G12 */165, 167, 169,
 	171,
-/* G13 */173, 175, 177,
-
-	181, 182, 185, 187, 189, 191, 193, 197, 199,
-	201, 203, 205, 207, 209, 213, 215, 217, 219, 
-	221, 223, 225, 229, 231, 235, 239, 241, 245, 
-	247, 249, 251
+/* G13 */173, 175, 177
 };
 
 u8 center_ch_5g_20m[CENTER_CH_5G_20M_NUM] = {
-	16, 20, 24, 28, 32, 
 /* G00 */36, 40,
 /* G01 */44, 48,
 /* G02 */52, 56,
 /* G03 */60, 64,
-	68, 72, 76, 80, 84, 88, 92, 96,
 /* G04 */100, 104,
 /* G05 */108, 112,
 /* G06 */116, 120,
@@ -106,27 +94,21 @@ u8 center_ch_5g_20m[CENTER_CH_5G_20M_NUM] = {
 /* G10 */149, 153,
 /* G11 */157, 161,
 /* G12 */165, 169,
-/* G13 */173, 177,
-	181, 185, 189, 193, 197, 
-	201, 205, 209, 213, 217, 
-	221, 225, 229, 231, 235, 
-	241, 245, 249, 251
+/* G13 */173, 177
 };
 
 #define ch_to_cch_5g_20m_idx(ch) \
 	( \
-		((ch) >= 16 && (ch) <= 96) ? (((ch) - 16) >> 2) : \
+		((ch) >= 36 && (ch) <= 64) ? (((ch) - 36) >> 2) : \
 		((ch) >= 100 && (ch) <= 144) ? 8 + (((ch) - 100) >> 2) : \
-		((ch) >= 149 && (ch) <= 253) ? 20 + (((ch) - 149) >> 2) : 255 \
+		((ch) >= 149 && (ch) <= 177) ? 20 + (((ch) - 149) >> 2) : 255 \
 	)
 
 u8 center_ch_5g_40m[CENTER_CH_5G_40M_NUM] = {
-	22, 30,
 /* G00 */38,
 /* G01 */46,
 /* G02 */54,
 /* G03 */62,
-	70, 78, 86, 94, 
 /* G04 */102,
 /* G05 */110,
 /* G06 */118,
@@ -136,25 +118,14 @@ u8 center_ch_5g_40m[CENTER_CH_5G_40M_NUM] = {
 /* G10 */151,
 /* G11 */159,
 /* G12 */167,
-/* G13 */175,
-	183, 191, 199, 207, 
-	215, 223, 239, 247
+/* G13 */175
 };
 
 u8 op_chs_of_cch_5g_40m[CENTER_CH_5G_40M_NUM][2] = {
-	{20, 24}, /* 22 */
-	{28, 32}, /* 30 */
-	
 	{36, 40}, /* 38 */
 	{44, 48}, /* 46 */
 	{52, 56}, /* 54 */
 	{60, 64}, /* 62 */
-	
-	{68, 72}, /* 70 */
-	{76, 80}, /* 78 */
-	{84, 88}, /* 86 */
-	{92, 96}, /* 94 */
-	
 	{100, 104}, /* 102 */
 	{108, 112}, /* 110 */
 	{116, 120}, /* 118 */
@@ -165,43 +136,26 @@ u8 op_chs_of_cch_5g_40m[CENTER_CH_5G_40M_NUM][2] = {
 	{157, 161}, /* 159 */
 	{165, 169}, /* 167 */
 	{173, 177}, /* 175 */
-	
-	{181, 185}, /* 183 */
-	{189, 193}, /* 191 */
-	{197, 201}, /* 199 */
-	{205, 209}, /* 207 */
-	{213, 217}, /* 215 */
-	{221, 225}, /* 223 */
-	{237, 241}, /* 239 */
-	{245, 249}, /* 247 */
 };
 
 u8 center_ch_5g_80m[CENTER_CH_5G_80M_NUM] = {
-	26,
 /* G00 ~ G01*/42,
 /* G02 ~ G03*/58,
-	74, 90, 
 /* G04 ~ G05*/106,
 /* G06 ~ G07*/122,
 /* G08 ~ G09*/138,
 /* G10 ~ G11*/155,
-/* G12 ~ G13*/171, 187, 203, 219
+/* G12 ~ G13*/171
 };
 
 u8 op_chs_of_cch_5g_80m[CENTER_CH_5G_80M_NUM][4] = {
-	{20, 24, 28, 32}, /* 26 */
 	{36, 40, 44, 48}, /* 42 */
 	{52, 56, 60, 64}, /* 58 */
-	{68, 72, 76, 80}, /* 74 */
-	{84, 88, 92, 96}, /* 90 */
 	{100, 104, 108, 112}, /* 106 */
 	{116, 120, 124, 128}, /* 122 */
 	{132, 136, 140, 144}, /* 138 */
 	{149, 153, 157, 161}, /* 155 */
 	{165, 169, 173, 177}, /* 171 */
-	{181, 185, 189, 193}, /* 187 */
-	{197, 201, 205, 209}, /* 203 */
-	{213, 217, 221, 225}, /* 219 */
 };
 
 u8 center_ch_5g_160m[CENTER_CH_5G_160M_NUM] = {
@@ -368,7 +322,6 @@ struct center_chs_ent_t center_chs_6g_by_bw[] = {
 static u8 _rtw_get_scch_by_bcch_offset(enum band_type band, u8 cch, u8 bw, u8 offset)
 {
 	u8 t_cch = 0;
-	u8 cch_offset_abs = 0;
 
 	if (bw == CHANNEL_WIDTH_20) {
 		t_cch = cch;
@@ -376,16 +329,14 @@ static u8 _rtw_get_scch_by_bcch_offset(enum band_type band, u8 cch, u8 bw, u8 of
 	}
 
 	if (offset == CHAN_OFFSET_NO_EXT) {
-		//rtw_warn_on(1);	// why?
-		t_cch = cch;
+		rtw_warn_on(1);
 		goto exit;
 	}
 
 	if (band == BAND_ON_24G) {
 		/* 2.4G, 40MHz */
 		if (cch >= 3 && cch <= 11 && bw == CHANNEL_WIDTH_40) {
-			cch_offset_abs = 2;
-			//t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 2 : cch - 2;
+			t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 2 : cch - 2;
 			goto exit;
 		}
 	}
@@ -393,21 +344,18 @@ static u8 _rtw_get_scch_by_bcch_offset(enum band_type band, u8 cch, u8 bw, u8 of
 #if CONFIG_IEEE80211_BAND_5GHZ
 	else if (band == BAND_ON_5G) {
 		/* 5G, 160MHz */
-		if (cch >= 16 && cch <= 253 && bw == CHANNEL_WIDTH_160) {
-			cch_offset_abs = 8;
-			//t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 8 : cch - 8;
+		if (cch >= 50 && cch <= 163 && bw == CHANNEL_WIDTH_160) {
+			t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 8 : cch - 8;
 			goto exit;
 
 		/* 5G, 80MHz */
-		} else if (cch >= 16 && cch <= 253 && bw == CHANNEL_WIDTH_80) {
-			cch_offset_abs = 4;
-			//t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 4 : cch - 4;
+		} else if (cch >= 42 && cch <= 171 && bw == CHANNEL_WIDTH_80) {
+			t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 4 : cch - 4;
 			goto exit;
 
 		/* 5G, 40MHz */
-		} else if (cch >= 16&& cch <= 253 && bw == CHANNEL_WIDTH_40) {
-			cch_offset_abs = 2;
-			//t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 2 : cch - 2;
+		} else if (cch >= 38 && cch <= 175 && bw == CHANNEL_WIDTH_40) {
+			t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 2 : cch - 2;
 			goto exit;
 
 		}
@@ -418,20 +366,17 @@ static u8 _rtw_get_scch_by_bcch_offset(enum band_type band, u8 cch, u8 bw, u8 of
 	else if (band == BAND_ON_6G) {
 		/* 6G, 160MHz */
 		if (cch >= 15 && cch <= 239 && bw == CHANNEL_WIDTH_160) {
-			cch_offset_abs = 8;
-			//t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 8 : cch - 8;
+			t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 8 : cch - 8;
 			goto exit;
 
 		/* 6G, 80MHz */
 		} else if (cch >= 7 && cch <= 247 && bw == CHANNEL_WIDTH_80) {
-			cch_offset_abs = 4;
-			//t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 4 : cch - 4;
+			t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 4 : cch - 4;
 			goto exit;
 
 		/* 6G, 40MHz */
 		} else if (cch >= 3 && cch <= 251 && bw == CHANNEL_WIDTH_40) {
-			cch_offset_abs = 2;
-			//t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 2 : cch - 2;
+			t_cch = (offset == CHAN_OFFSET_LOWER) ? cch + 2 : cch - 2;
 			goto exit;
 
 		}
@@ -441,18 +386,6 @@ static u8 _rtw_get_scch_by_bcch_offset(enum band_type band, u8 cch, u8 bw, u8 of
 	rtw_warn_on(1);
 
 exit:
-	switch (offset) {
-		case CHAN_OFFSET_LOWER:
-			t_cch = cch + cch_offset_abs;
-		break;
-		case CHAN_OFFSET_UPPER:
-			t_cch = cch - cch_offset_abs;
-		break;
-		case CHAN_OFFSET_NO_EXT:
-		default:
-			t_cch = cch;
-		break;
-	}
 	return t_cch;
 }
 
@@ -656,7 +589,7 @@ static u8 _rtw_get_op_chs_by_bcch_bw(enum band_type band, u8 cch, u8 bw, u8 **op
 	for (i = 0; i < c_chs_ent->ch_num; i++)
 		if (cch == *(c_chs_ent->chs + i))
 			break;
-	//RTW_INFO("%s i:%d, cch:%d, chs:%d, chnum:%d\n" , __func__, i, cch, c_chs_ent->chs, c_chs_ent->ch_num);
+
 	if (i == c_chs_ent->ch_num) {
 		valid = 0;
 		goto exit;
@@ -681,10 +614,11 @@ u8 rtw_get_op_chs_by_bcch_bw(enum band_type band, u8 cch, u8 bw, u8 **op_chs, u8
 	return _rtw_get_op_chs_by_bcch_bw(band, cch, bw, op_chs, op_ch_num);
 }
 
-static u8 rtw_get_offset_by_chbw_2g(u8 ch, u8 bw, u8 *r_offset)
+static u8 rtw_get_offsets_by_chbw_2g(u8 ch, u8 bw, u8 *r_offset, u8 *r_offset_num)
 {
 	u8 valid = 1;
-	u8 offset = CHAN_OFFSET_NO_EXT;
+	u8 offset[2] = {CHAN_OFFSET_NO_EXT, CHAN_OFFSET_NO_EXT};
+	u8 offset_num = 1;
 
 	if (bw >= CHANNEL_WIDTH_80
 		|| ch < 1 || ch > 14
@@ -697,22 +631,36 @@ static u8 rtw_get_offset_by_chbw_2g(u8 ch, u8 bw, u8 *r_offset)
 		goto exit;
 
 	if (ch >= 1 && ch <= 4)
-		offset = CHAN_OFFSET_UPPER;
+		offset[0] = CHAN_OFFSET_UPPER;
 	else if (ch >= 5 && ch <= 9) {
-		if (*r_offset == CHAN_OFFSET_UPPER || *r_offset == CHAN_OFFSET_LOWER)
-			offset = *r_offset; /* both lower and upper is valid, obey input value */
-		else
-			offset = CHAN_OFFSET_LOWER; /* default use primary upper */
+		if (!r_offset_num) {
+			/* return single offset */
+			if (r_offset && (*r_offset == CHAN_OFFSET_UPPER || *r_offset == CHAN_OFFSET_LOWER))
+				offset[0] = *r_offset; /* both lower and upper is valid, obey input value */
+			else
+				offset[0] = CHAN_OFFSET_LOWER; /* default use primary upper */
+		} else {
+			offset_num = 2;
+			offset[0] = CHAN_OFFSET_LOWER;
+			offset[1] = CHAN_OFFSET_UPPER;
+		}
 	} else if (ch >= 10 && ch <= 13)
-		offset = CHAN_OFFSET_LOWER;
+		offset[0] = CHAN_OFFSET_LOWER;
 	else {
 		valid = 0; /* ch14 doesn't support 40MHz bandwidth */
 		goto exit;
 	}
 
 exit:
-	if (valid && r_offset)
-		*r_offset = offset;
+	if (valid) {
+		if (r_offset) {
+			*r_offset = offset[0];
+			if (offset_num == 2)
+				*(r_offset + 1) = offset[1];
+		}
+		if (r_offset_num)
+			*r_offset_num = offset_num;
+	}
 	return valid;
 }
 
@@ -722,22 +670,16 @@ static u8 rtw_get_offset_by_chbw_5g(u8 ch, u8 bw, u8 *r_offset)
 	u8 valid = 1;
 	u8 offset = CHAN_OFFSET_NO_EXT;
 
-	if (ch < 16 || ch > 253) {
+	if (ch < 36 || ch > 177) {
 		valid = 0;
 		goto exit;
 	}
 
 	switch (ch) {
-	case 20:
-	case 28:
 	case 36:
 	case 44:
 	case 52:
 	case 60:
-	case 68:
-	case 76:
-	case 84:
-	case 92:
 	case 100:
 	case 108:
 	case 116:
@@ -748,30 +690,13 @@ static u8 rtw_get_offset_by_chbw_5g(u8 ch, u8 bw, u8 *r_offset)
 	case 157:
 	case 165:
 	case 173:
-	case 181:
-	case 189:
-	case 197:
-	case 205:
-	case 213:
-	case 221:
-	case 229:
-	case 237:
-	case 245:
-	case 253:
 		if (bw >= CHANNEL_WIDTH_40 && bw <= CHANNEL_WIDTH_160)
 			offset = CHAN_OFFSET_UPPER;
 		break;
-	case 16:
-	case 24:
-	case 32:
 	case 40:
 	case 48:
 	case 56:
 	case 64:
-	case 72:
-	case 80:
-	case 88:
-	case 96:
 	case 104:
 	case 112:
 	case 120:
@@ -782,15 +707,6 @@ static u8 rtw_get_offset_by_chbw_5g(u8 ch, u8 bw, u8 *r_offset)
 	case 161:
 	case 169:
 	case 177:
-	case 185:
-	case 193:
-	case 201:
-	case 209:
-	case 217:
-	case 225:
-	case 233:
-	case 241:
-	case 249:
 		if (bw >= CHANNEL_WIDTH_40 && bw <= CHANNEL_WIDTH_160)
 			offset = CHAN_OFFSET_LOWER;
 		break;
@@ -834,8 +750,14 @@ static u8 rtw_get_offset_by_chbw_6g(u8 ch, u8 bw, u8 *r_offset)
 
 u8 rtw_get_offset_by_bchbw(enum band_type band, u8 ch, u8 bw, u8 *r_offset)
 {
-	if (band == BAND_ON_24G)
-		return rtw_get_offset_by_chbw_2g(ch, bw, r_offset);
+	if (band == BAND_ON_24G) {
+		u8 offset[1] = {r_offset ? *r_offset : CHAN_OFFSET_NO_EXT};
+		u8 ret = rtw_get_offsets_by_chbw_2g(ch, bw, offset, NULL);
+
+		if (ret && r_offset)
+			*r_offset = offset[0];
+		return ret;
+	}
 #if CONFIG_IEEE80211_BAND_5GHZ
 	else if (band == BAND_ON_5G)
 		return rtw_get_offset_by_chbw_5g(ch, bw, r_offset);
@@ -853,6 +775,29 @@ RTW_FUNC_2G_5G_ONLY u8 rtw_get_offset_by_chbw(u8 ch, u8 bw, u8 *r_offset)
 	return rtw_get_offset_by_bchbw(rtw_is_2g_ch(ch) ? BAND_ON_24G : BAND_ON_5G, ch, bw, r_offset);
 }
 #endif
+
+u8 rtw_get_offsets_by_bchbw(enum band_type band, u8 ch, u8 bw, u8 *r_offset, u8 *r_offset_num)
+{
+	u8 ret = 0;
+
+	if (band == BAND_ON_24G)
+		ret = rtw_get_offsets_by_chbw_2g(ch, bw, r_offset, r_offset_num);
+#if CONFIG_IEEE80211_BAND_5GHZ
+	else if (band == BAND_ON_5G) {
+		ret = rtw_get_offset_by_chbw_5g(ch, bw, r_offset);
+		if (ret && r_offset_num)
+			*r_offset_num = 1;
+	}
+#endif
+#if CONFIG_IEEE80211_BAND_6GHZ
+	else if (band == BAND_ON_6G) {
+		ret = rtw_get_offset_by_chbw_6g(ch, bw, r_offset);
+		if (ret && r_offset_num)
+			*r_offset_num = 1;
+	}
+#endif
+	return ret;
+}
 
 static u8 rtw_get_center_ch_2g(u8 ch, u8 bw, u8 offset)
 {
@@ -896,16 +841,10 @@ static u8 rtw_get_center_ch_5g(u8 ch, u8 bw, u8 offset)
 
 	} else if (bw == CHANNEL_WIDTH_80) {
 		if (ch % 4 == 0) {
-			if (ch >= 16 && ch <= 32)
-				cch = 26;
 			if (ch >= 36 && ch <= 48)
 				cch = 42;
 			else if (ch >= 52 && ch <= 64)
 				cch = 58;
-			else if (ch >= 68 && ch <= 80)
-				cch = 74;
-			else if (ch >= 84 && ch <= 96)
-				cch = 90;
 			else if (ch >= 100 && ch <= 112)
 				cch = 106;
 			else if (ch >= 116 && ch <= 128)
@@ -917,14 +856,6 @@ static u8 rtw_get_center_ch_5g(u8 ch, u8 bw, u8 offset)
 				cch = 155;
 			else if (ch >= 165 && ch <= 177)
 				cch = 171;
-			else if (ch >= 181 && ch <= 193)
-				cch = 187;
-			else if (ch >= 197 && ch <= 209)
-				cch = 203;
-			else if (ch >= 213 && ch <= 225)
-				cch = 219;
-			else if (ch >= 229 && ch <= 241)
-				cch = 235;
 		}
 
 	} else if (bw == CHANNEL_WIDTH_40) {
@@ -1127,7 +1058,7 @@ static int rtw_ch2freq_2g(int ch)
 #if CONFIG_IEEE80211_BAND_5GHZ
 static int rtw_ch2freq_5g(int ch)
 {
-	if (ch >= 16 && ch <= 253)
+	if (ch >= 36 && ch <= 177)
 		return 5000 + ch * 5;
 
 	return 0; /* not supported */
@@ -1175,7 +1106,7 @@ int rtw_freq2ch(int freq)
 		return (freq - 2407) / 5;
 	else if (freq >= 4910 && freq <= 4980)
 		return (freq - 4000) / 5;
-	else if (freq >= 5000 && freq < 6280)	// this driver is dedicated to a 5GHz-only RTL8812/8822cu, so...
+	else if (freq >= 5000 && freq < 5950)
 		return (freq - 5000) / 5;
 	else if (freq >= 5950 && freq <= 7215)
 		return (freq - 5950) / 5;
@@ -1190,7 +1121,7 @@ enum band_type rtw_freq2band(int freq)
 	if (freq <= 2484)
 		return BAND_ON_24G;
 #if CONFIG_IEEE80211_BAND_5GHZ
-	else if (freq >= 5000 && freq < 6280)
+	else if (freq >= 5000 && freq < 5950)
 		return BAND_ON_5G;
 #endif
 #if CONFIG_IEEE80211_BAND_6GHZ
@@ -1199,6 +1130,28 @@ enum band_type rtw_freq2band(int freq)
 #endif
 	else
 		return BAND_MAX;
+}
+
+enum channel_width rtw_frange_to_bw(u32 hi, u32 lo)
+{
+	u32 width = hi - lo;
+
+	switch (width) {
+	case 160:
+		return CHANNEL_WIDTH_160;
+	case 80:
+		return CHANNEL_WIDTH_80;
+	case 40:
+		return CHANNEL_WIDTH_40;
+	case 20:
+		return CHANNEL_WIDTH_20;
+	case 10:
+		return CHANNEL_WIDTH_10;
+	case 5:
+		return CHANNEL_WIDTH_5;
+	default:
+		return CHANNEL_WIDTH_MAX;
+	}
 }
 
 bool rtw_freq_consecutive(int a, int b)
@@ -1342,22 +1295,11 @@ const u8 _opc_bw_to_ch_width[OPC_BW_NUM] = {
 };
 
 /* global operating class database */
-
-struct op_class_t {
-	u8 class_id;
-	enum band_type band;
-	enum opc_bw bw;
-	u8 *len_ch_attr;
-};
-
-#define OPC_CH_LIST_LEN(_opc) (_opc.len_ch_attr[0])
-#define OPC_CH_LIST_CH(_opc, _i) (_opc.len_ch_attr[_i + 1])
-
 #define OP_CLASS_ENT(_class, _band, _bw, _len, arg...) \
 	{.class_id = _class, .band = _band, .bw = _bw, .len_ch_attr = (uint8_t[_len + 1]) {_len, ##arg},}
 
 /* 802.11-2020, 802.11ax-2021 Table E-4, partial */
-static const struct op_class_t global_op_class[] = {
+const struct op_class_t global_op_class[] = {
 	/* 2G ch1~13, 20M */
 	OP_CLASS_ENT(81,	BAND_ON_24G,	OPC_BW20,		13,	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13),
 	/* 2G ch14, 20M */
@@ -1368,25 +1310,25 @@ static const struct op_class_t global_op_class[] = {
 
 #if CONFIG_IEEE80211_BAND_5GHZ
 	/* 5G band 1, 20M & 40M */
-	OP_CLASS_ENT(115,	BAND_ON_5G,		OPC_BW20,	9,	16, 20, 24, 28, 32, 36, 40, 44, 48),
-	OP_CLASS_ENT(116,	BAND_ON_5G,		OPC_BW40PLUS,	4,	20, 28, 36, 44),
-	OP_CLASS_ENT(117,	BAND_ON_5G,		OPC_BW40MINUS,	4,	24, 32, 40, 48),
+	OP_CLASS_ENT(115,	BAND_ON_5G,		OPC_BW20,		4,	36, 40, 44, 48),
+	OP_CLASS_ENT(116,	BAND_ON_5G,		OPC_BW40PLUS,	2,	36, 44),
+	OP_CLASS_ENT(117,	BAND_ON_5G,		OPC_BW40MINUS,	2,	40, 48),
 	/* 5G band 2, 20M & 40M */
-	OP_CLASS_ENT(118,	BAND_ON_5G,		OPC_BW20,	12,	52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96),
-	OP_CLASS_ENT(119,	BAND_ON_5G,		OPC_BW40PLUS,	6,	52, 60, 68, 76, 84, 92),
-	OP_CLASS_ENT(120,	BAND_ON_5G,		OPC_BW40MINUS,	6,	56, 64, 72, 80, 88, 96),
+	OP_CLASS_ENT(118,	BAND_ON_5G,		OPC_BW20,		4,	52, 56, 60, 64),
+	OP_CLASS_ENT(119,	BAND_ON_5G,		OPC_BW40PLUS,	2,	52, 60),
+	OP_CLASS_ENT(120,	BAND_ON_5G,		OPC_BW40MINUS,	2,	56, 64),
 	/* 5G band 3, 20M & 40M */
-	OP_CLASS_ENT(121,	BAND_ON_5G,		OPC_BW20,	12,	100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144),
+	OP_CLASS_ENT(121,	BAND_ON_5G,		OPC_BW20,		12,	100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144),
 	OP_CLASS_ENT(122,	BAND_ON_5G,		OPC_BW40PLUS,	6,	100, 108, 116, 124, 132, 140),
 	OP_CLASS_ENT(123,	BAND_ON_5G,		OPC_BW40MINUS,	6,	104, 112, 120, 128, 136, 144),
 	/* 5G band 4, 20M & 40M */
-	OP_CLASS_ENT(124,	BAND_ON_5G,		OPC_BW20,	24,	149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 241, 245, 249),
-	OP_CLASS_ENT(125,	BAND_ON_5G,		OPC_BW20,	24,	149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225, 229, 241, 245, 249),
-	OP_CLASS_ENT(126,	BAND_ON_5G,		OPC_BW40PLUS,	12,	149, 157, 165, 173, 181, 189, 197, 205, 213, 221, 237, 245),
-	OP_CLASS_ENT(127,	BAND_ON_5G,		OPC_BW40MINUS,	12,	153, 161, 169, 177, 185, 193, 201, 209, 217, 225, 241, 249),
+	OP_CLASS_ENT(124,	BAND_ON_5G,		OPC_BW20,		4,	149, 153, 157, 161),
+	OP_CLASS_ENT(125,	BAND_ON_5G,		OPC_BW20,		8,	149, 153, 157, 161, 165, 169, 173, 177),
+	OP_CLASS_ENT(126,	BAND_ON_5G,		OPC_BW40PLUS,	4,	149, 157, 165, 173),
+	OP_CLASS_ENT(127,	BAND_ON_5G,		OPC_BW40MINUS,	4,	153, 161, 169, 177),
 	/* 5G, 80M & 160M */
-	OP_CLASS_ENT(128,	BAND_ON_5G,		OPC_BW80,	53,	16, 20, 24, 28, 32, /*5*/36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96,/*8*/ 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165, 169, 173, 177, 181, 185, 189, 193, 197, 201, 205, 209, 213, 217, 221, 225),
-	OP_CLASS_ENT(129,	BAND_ON_5G,		OPC_BW160,	24,	36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 149, 153, 157, 161, 165, 169, 173, 177),
+	OP_CLASS_ENT(128,	BAND_ON_5G,		OPC_BW80,		28,	36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165, 169, 173, 177),
+	OP_CLASS_ENT(129,	BAND_ON_5G,		OPC_BW160,		24,	36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 149, 153, 157, 161, 165, 169, 173, 177),
 	#if 0 /* TODO */
 	/* 5G, 80+80M */
 	OP_CLASS_ENT(130,	BAND_ON_5G,		OPC_BW80P80,	28,	36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 161, 165, 169, 173, 177),
@@ -1426,9 +1368,9 @@ static const struct op_class_t global_op_class[] = {
 #endif
 };
 
-static const int global_op_class_num = sizeof(global_op_class) / sizeof(struct op_class_t);
+const int global_op_class_num = sizeof(global_op_class) / sizeof(struct op_class_t);
 
-static const struct op_class_t *get_global_op_class_by_id(u8 gid)
+const struct op_class_t *get_global_op_class_by_id(u8 gid)
 {
 	int i;
 
@@ -1444,7 +1386,7 @@ bool is_valid_global_op_class_id(u8 gid)
 	return get_global_op_class_by_id(gid) ? 1 : 0;
 }
 
-static bool is_valid_global_op_class_ch(const struct op_class_t *opc, u8 ch)
+bool is_valid_global_op_class_ch(const struct op_class_t *opc, u8 ch)
 {
 	int array_idx;
 	int i;
@@ -1847,11 +1789,9 @@ void rtw_rfctl_op_class_pref_deinit(struct rf_ctl_t *rfctl)
 	rfctl->spt_op_class_ch = NULL;
 }
 
-void op_class_pref_apply_regulatory(_adapter *adapter, u8 reason)
+void op_class_pref_apply_regulatory(struct rf_ctl_t *rfctl, u8 reason)
 {
-	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
 	struct rtw_chset *chset = &rfctl->chset;
-	struct registry_priv *regsty = adapter_to_regsty(adapter);
 	u8 ch, bw, offset, cch;
 	struct op_class_pref_t *opc_pref;
 	int i, j;
@@ -2348,6 +2288,7 @@ s16 mb_of_ntx(u8 ntx)
 	if (ntx == 0 || ntx > 8) {
 		RTW_ERR("ntx=%u, out of range\n", ntx);
 		rtw_warn_on(1);
+		return 0;
 	}
 
 	return _mb_of_ntx[ntx - 1];
@@ -2360,15 +2301,15 @@ int rtw_ch_to_bb_gain_sel(int ch)
 	if (ch >= 1 && ch <= 14)
 		sel = BB_GAIN_2G;
 #if CONFIG_IEEE80211_BAND_5GHZ
-	else if (ch >= 16 && ch < 48)
+	else if (ch >= 36 && ch < 48)
 		sel = BB_GAIN_5GLB1;
-	else if (ch >= 52 && ch <= 96)
+	else if (ch >= 52 && ch <= 64)
 		sel = BB_GAIN_5GLB2;
 	else if (ch >= 100 && ch <= 120)
 		sel = BB_GAIN_5GMB1;
 	else if (ch >= 124 && ch <= 144)
 		sel = BB_GAIN_5GMB2;
-	else if (ch >= 149 && ch <= 253)
+	else if (ch >= 149 && ch <= 177)
 		sel = BB_GAIN_5GHB;
 #endif
 

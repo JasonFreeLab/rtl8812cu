@@ -295,12 +295,6 @@ static u8 _send_ht_ndpa_packet(PADAPTER adapter, u8 *ra, enum channel_width bw)
 		aSifsTime = 10;
 	else
 		aSifsTime = 16;
-		
-	if (pmlmeinfo->sifs_override_en == 1) {
-		aSifsTime = pmlmeinfo->sifs_override;
-		RTW_INFO("_send_ht_ndpa_packet: sifs_override enabled, %d\n", aSifsTime);
-	}
-		
 	duration = 2 * aSifsTime + 40;
 	if (bw == CHANNEL_WIDTH_40)
 		duration += 87;
@@ -340,7 +334,6 @@ static u8 _send_vht_ndpa_packet(PADAPTER adapter, u8 *ra, u16 aid, enum channel_
 	struct xmit_priv		*pxmitpriv;
 	struct mlme_ext_priv		*pmlmeext;
 	struct xmit_frame		*pmgntframe;
-	struct mlme_ext_info		*pmlmeinfo;
 	/* Beamforming */
 	struct beamforming_info		*info;
 	struct beamformee_entry		*bfee;
@@ -358,7 +351,6 @@ static u8 _send_vht_ndpa_packet(PADAPTER adapter, u8 *ra, u16 aid, enum channel_
 
 	pxmitpriv = &adapter->xmitpriv;
 	pmlmeext = &adapter->mlmeextpriv;
-	pmlmeinfo = &pmlmeext->mlmext_info;
 	info = GET_BEAMFORM_INFO(adapter);
 	bfee = rtw_bf_bfee_get_entry_by_addr(adapter, ra);
 	if (!bfee) {
@@ -397,12 +389,6 @@ static u8 _send_vht_ndpa_packet(PADAPTER adapter, u8 *ra, u16 aid, enum channel_
 		aSifsTime = 16;
 	else
 		aSifsTime = 10;
-		
-	if (pmlmeinfo->sifs_override_en == 1) {
-		aSifsTime = pmlmeinfo->sifs_override;
-		RTW_INFO("_send_vht_ndpa_packet: sifs_override enabled, %d\n", aSifsTime);
-	}
-	
 	duration = 2 * aSifsTime + 44;
 	if (bw == CHANNEL_WIDTH_80)
 		duration += 40;
@@ -454,7 +440,6 @@ static u8 _send_vht_mu_ndpa_packet(PADAPTER adapter, enum channel_width bw)
 	struct xmit_priv		*pxmitpriv;
 	struct mlme_ext_priv		*pmlmeext;
 	struct xmit_frame		*pmgntframe;
-	struct mlme_ext_info		*pmlmeinfo;
 	/* Beamforming */
 	struct beamforming_info		*info;
 	struct sounding_info		*sounding;
@@ -475,7 +460,6 @@ static u8 _send_vht_mu_ndpa_packet(PADAPTER adapter, enum channel_width bw)
 
 	pxmitpriv = &adapter->xmitpriv;
 	pmlmeext = &adapter->mlmeextpriv;
-	pmlmeinfo = &pmlmeext->mlmext_info;
 	info = GET_BEAMFORM_INFO(adapter);
 	sounding = &info->sounding_info;
 
@@ -522,12 +506,6 @@ static u8 _send_vht_mu_ndpa_packet(PADAPTER adapter, enum channel_width bw)
 		aSifsTime = 16;
 	else
 		aSifsTime = 10;
-		
-	if (pmlmeinfo->sifs_override_en == 1) {
-		aSifsTime = pmlmeinfo->sifs_override;
-		RTW_INFO("_send_vht_mu_ndpa_packet: sifs_override enabled, %d\n", aSifsTime);
-	}
-	
 	duration = 2 * aSifsTime + 44;
 	if (bw == CHANNEL_WIDTH_80)
 		duration += 40;

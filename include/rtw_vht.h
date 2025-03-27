@@ -208,7 +208,7 @@ void	VHT_caps_handler_infra_ap(_adapter *padapter, PNDIS_802_11_VARIABLE_IEs pIE
 #endif /* ROKU_PRIVATE */
 void	VHT_operation_handler(_adapter *padapter, PNDIS_802_11_VARIABLE_IEs pIE);
 void	rtw_process_vht_op_mode_notify(_adapter *padapter, u8 *pframe, void *sta);
-u32	rtw_restructure_vht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, uint in_len, uint *pout_len, u8 channel, struct country_chplan *req_chplan);
+u32	rtw_restructure_vht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, uint in_len, uint *pout_len, u8 channel);
 void	VHTOnAssocRsp(_adapter *padapter);
 u8	rtw_vht_mcsmap_to_nss(u8 *pvht_mcs_map);
 void rtw_vht_nss_to_mcsmap(u8 nss, u8 *target_mcs_map, u8 *cur_mcs_map);

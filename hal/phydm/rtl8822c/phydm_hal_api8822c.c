@@ -112,6 +112,10 @@ void phydm_sdm_reset_8822c(struct dm_struct *dm)
 	odm_set_rf_reg(dm, RF_PATH_A, RF_0xbc, BIT(19), 0x0);
 	odm_set_rf_reg(dm, RF_PATH_A, RF_0xbc, BIT(19), 0x1);
 	odm_set_rf_reg(dm, RF_PATH_A, RF_0xbc, BIT(19), 0x0);
+	/*write rf dummy register*/
+	odm_set_rf_reg(dm, RF_PATH_B, 0xff, BIT(19), 0x0);
+	odm_set_rf_reg(dm, RF_PATH_B, 0xff, BIT(19), 0x1);
+	odm_set_rf_reg(dm, RF_PATH_B, 0xff, BIT(19), 0x0);
 	/*reset HSSI*/
 	phydm_rstb_3wire_8822c(dm, true);
 }
@@ -473,7 +477,7 @@ void config_phydm_set_txagc_to_hw_8822c(struct dm_struct *dm)
 {
 #if (defined(CONFIG_RUN_IN_DRV))
 	s8 diff_tab[2][NUM_RATE_AC_2SS]; /*power diff table of 2 paths*/
-	s8 diff_tab_min[4];
+	s8 diff_tab_min[NUM_RATE_AC_2SS];
 	u8 ref_pow_cck[2] = {dm->txagc_buff[RF_PATH_A][ODM_RATE11M],
 			     dm->txagc_buff[RF_PATH_B][ODM_RATE11M]};
 	u8 ref_pow_ofdm[2] = {dm->txagc_buff[RF_PATH_A][ODM_RATEMCS7],
@@ -544,35 +548,33 @@ void config_phydm_set_txagc_to_hw_8822c(struct dm_struct *dm)
 #endif
 
 	for (i = ODM_RATE1M; i <= ODM_RATEMCS15; i++) {
-		j = i % 4;
-		diff_tab_min[j] = MIN_2(diff_tab[RF_PATH_A][i],
+		diff_tab_min[i] = MIN_2(diff_tab[RF_PATH_A][i],
 					diff_tab[RF_PATH_B][i]);
 		#ifdef CONFIG_TXAGC_DEBUG_8822C
-		pr_debug("diff_tab_min[rate:%d]= %d\n", i, diff_tab_min[j]);
+		pr_debug("diff_tab_min[rate:%d]= %d\n", i, diff_tab_min[i]);
 		#endif
 		if  (i % 4 == 3) {
 			config_phydm_write_txagc_diff_8822c(dm,
-							    diff_tab_min[j - 3],
-							    diff_tab_min[j - 2],
-							    diff_tab_min[j - 1],
-							    diff_tab_min[j],
+							    diff_tab_min[i - 3],
+							    diff_tab_min[i - 2],
+							    diff_tab_min[i - 1],
+							    diff_tab_min[i],
 							    i - 3);
 		}
 	}
 
 	for (i = ODM_RATEVHTSS1MCS0; i <= ODM_RATEVHTSS2MCS9; i++) {
-		j = i % 4;
-		diff_tab_min[j] = MIN_2(diff_tab[RF_PATH_A][i],
+		diff_tab_min[i] = MIN_2(diff_tab[RF_PATH_A][i],
 					diff_tab[RF_PATH_B][i]);
 		#ifdef CONFIG_TXAGC_DEBUG_8822C
-		pr_debug("diff_tab_min[rate:%d]= %d\n", i, diff_tab_min[j]);
+		pr_debug("diff_tab_min[rate:%d]= %d\n", i, diff_tab_min[i]);
 		#endif
 		if  (i % 4 == 3) {
 			config_phydm_write_txagc_diff_8822c(dm,
-							    diff_tab_min[j - 3],
-							    diff_tab_min[j - 2],
-							    diff_tab_min[j - 1],
-							    diff_tab_min[j],
+							    diff_tab_min[i - 3],
+							    diff_tab_min[i - 2],
+							    diff_tab_min[i - 1],
+							    diff_tab_min[i],
 							    i - 3);
 		}
 	}
@@ -680,7 +682,7 @@ void phydm_get_txagc_ref_and_diff_8822c(struct dm_struct *dm,
 {
 #if (defined(CONFIG_RUN_IN_DRV))
 	s8 diff_tab[2][NUM_RATE_AC_2SS]; /*power diff table of 2 paths*/
-	s8 diff_tab_min;
+	s8 diff_tab_min[NUM_RATE_AC_2SS];
 	u8 ref_pow_cck[2];
 	u8 ref_pow_ofdm[2];
 	u8 ref_pow_tmp = 0;
@@ -751,18 +753,16 @@ void phydm_get_txagc_ref_and_diff_8822c(struct dm_struct *dm,
 #endif
 
 	for (i = ODM_RATE1M; i <= ODM_RATEMCS15; i++) {
-		diff_tab_min = MIN_2(diff_tab[RF_PATH_A][i],
+		diff_tab_min[i] = MIN_2(diff_tab[RF_PATH_A][i],
 					diff_tab[RF_PATH_B][i]);
-		tab->diff_t[i] = diff_tab_min;
 		#ifdef CONFIG_TXAGC_DEBUG_8822C
 		pr_debug("diff_tab_min[rate:%d]= %d\n", i, diff_tab_min[i]);
 		#endif
 	}
 
 	for (i = ODM_RATEVHTSS1MCS0; i <= ODM_RATEVHTSS2MCS9; i++) {
-		diff_tab_min = MIN_2(diff_tab[RF_PATH_A][i],
+		diff_tab_min[i] = MIN_2(diff_tab[RF_PATH_A][i],
 					diff_tab[RF_PATH_B][i]);
-		tab->diff_t[i] = diff_tab_min;
 		#ifdef CONFIG_TXAGC_DEBUG_8822C
 		pr_debug("diff_tab_min[rate:%d]= %d\n", i, diff_tab_min[i]);
 		#endif
@@ -770,6 +770,7 @@ void phydm_get_txagc_ref_and_diff_8822c(struct dm_struct *dm,
 
 	odm_move_memory(dm, tab->ref_pow_cck, ref_pow_cck, 2);
 	odm_move_memory(dm, tab->ref_pow_ofdm, ref_pow_ofdm, 2);
+	odm_move_memory(dm, tab->diff_t, diff_tab_min, NUM_RATE_AC_2SS);
 #endif
 }
 #endif
@@ -1404,7 +1405,7 @@ phydm_sco_trk_fc_setting_8822c(struct dm_struct *dm, u8 central_ch)
 	} else if (central_ch >= 1 && central_ch <= 10) {
 		/* @n:42, s:38 */
 		odm_set_bb_reg(dm, R_0xc30, 0xfff, 0x9aa);
-	} else if (central_ch >= 16 && central_ch <= 51) {
+	} else if (central_ch >= 36 && central_ch <= 51) {
 		/* @n:20, s:18 */
 		odm_set_bb_reg(dm, R_0xc30, 0xfff, 0x494);
 	} else if (central_ch >= 52 && central_ch <= 55) {
@@ -1430,11 +1431,17 @@ void
 phydm_tx_dfir_setting_8822c(struct dm_struct *dm, u8 central_ch)
 {
 	if (central_ch <= 14) {
+		if (central_ch == 11)
+			odm_set_bb_reg(dm, R_0x808, 0x700000, 0x3);
+		else
+			odm_set_bb_reg(dm, R_0x808, 0x700000, 0x1);
+
 		if (central_ch == 13)
 			odm_set_bb_reg(dm, R_0x808, 0x70, 0x3);
 		else
 			odm_set_bb_reg(dm, R_0x808, 0x70, 0x1);
 	} else {
+		odm_set_bb_reg(dm, R_0x808, 0x700000, 0x1);
 		odm_set_bb_reg(dm, R_0x808, 0x70, 0x3);
 	}
 }
@@ -1520,8 +1527,6 @@ void phydm_set_auto_nbi_8822c(struct dm_struct *dm, boolean en_auto_nbi)
 __odm_func__
 void phydm_csi_mask_enable_8822c(struct dm_struct *dm, boolean enable)
 {
-	dm->is_nbi_csi = enable;
-
 	if (enable)
 		odm_set_bb_reg(dm, R_0xc0c, BIT(3), 0x1);
 	else
@@ -1623,7 +1628,7 @@ config_phydm_switch_channel_8822c(struct dm_struct *dm, u8 central_ch)
 	enum bb_path tx = BB_PATH_NON;
 	enum bb_path rx = BB_PATH_NON;
 	u8 rfe_type = dm->rfe_type;
-	//struct phydm_iot_center	*iot_table = &dm->iot_table;
+	struct phydm_iot_center	*iot_table = &dm->iot_table;
 
 	PHYDM_DBG(dm, ODM_PHY_CONFIG, "%s ======>\n", __func__);
 
@@ -1632,10 +1637,10 @@ config_phydm_switch_channel_8822c(struct dm_struct *dm, u8 central_ch)
 		return true;
 	}
 
-	if ((central_ch > 14 && central_ch < 16) ||
-	    (central_ch > 96 && central_ch < 100) ||
+	if ((central_ch > 14 && central_ch < 36) ||
+	    (central_ch > 64 && central_ch < 100) ||
 	    (central_ch > 144 && central_ch < 149) ||
-	    central_ch > 253) {
+	    central_ch > 177) {
 		PHYDM_DBG(dm, ODM_PHY_CONFIG, "Error CH:%d\n", central_ch);
 		return false;
 	}
@@ -1707,9 +1712,9 @@ config_phydm_switch_channel_8822c(struct dm_struct *dm, u8 central_ch)
 			phydm_cck_agc_tab_sel_8822c(dm, CCK_BW40_8822C);
 			phydm_ofdm_agc_tab_sel_8822c(dm, OFDM_2G_BW40_8822C);
 		}
-	} else if (central_ch >= 16 && central_ch < 80) {
+	} else if (central_ch >= 36 && central_ch <= 64) {
 		phydm_ofdm_agc_tab_sel_8822c(dm, OFDM_5G_LOW_BAND_8822C);
-	} else if ((central_ch >= 80) && (central_ch <= 144)) {
+	} else if ((central_ch >= 100) && (central_ch <= 144)) {
 		phydm_ofdm_agc_tab_sel_8822c(dm, OFDM_5G_MID_BAND_8822C);
 	} else { /*if (central_ch >= 149)*/
 		phydm_ofdm_agc_tab_sel_8822c(dm, OFDM_5G_HIGH_BAND_8822C);
@@ -1752,14 +1757,12 @@ config_phydm_switch_channel_8822c(struct dm_struct *dm, u8 central_ch)
 		}
 	}
 
-#if 0
 	if (iot_table->patch_id_011f0500) {
 		if (central_ch != 1 && dm->en_dis_dpd)
 			phydm_set_dis_dpd_by_rate_8822c(dm, 0x3ff);
 		else
 			phydm_set_dis_dpd_by_rate_8822c(dm, 0x0);
 	}
-#endif
 	/*====================================================================*/
 	if (*dm->mp_mode)
 		phydm_spur_eliminate_8822c(dm, central_ch);

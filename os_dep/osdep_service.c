@@ -304,7 +304,11 @@ void *_rtw_malloc(u32 sz)
 		pbuf = dvr_malloc(sz);
 	else
 #endif
+#ifdef CONFIG_RTKM
+		pbuf = rtkm_kmalloc(sz, in_interrupt() ? GFP_ATOMIC : GFP_KERNEL);
+#else /* !CONFIG_RTKM */
 		pbuf = kmalloc(sz, in_interrupt() ? GFP_ATOMIC : GFP_KERNEL);
+#endif /* CONFIG_RTKM */
 
 #endif
 #ifdef PLATFORM_FREEBSD
@@ -340,6 +344,9 @@ void *_rtw_zmalloc(u32 sz)
 #ifdef PLATFORM_FREEBSD
 	return malloc(sz, M_DEVBUF, M_ZERO | M_NOWAIT);
 #else /* PLATFORM_FREEBSD */
+#ifdef CONFIG_RTKM
+	void *pbuf = rtkm_kzalloc(sz, in_interrupt() ? GFP_ATOMIC : GFP_KERNEL);
+#else /* !CONFIG_RTKM */
 	void *pbuf = _rtw_malloc(sz);
 
 	if (pbuf != NULL) {
@@ -352,6 +359,7 @@ void *_rtw_zmalloc(u32 sz)
 		NdisFillMemory(pbuf, sz, 0);
 #endif
 	}
+#endif /* CONFIG_RTKM */
 
 	return pbuf;
 #endif /* PLATFORM_FREEBSD */
@@ -371,7 +379,11 @@ void _rtw_mfree(void *pbuf, u32 sz)
 		dvr_free(pbuf);
 	else
 #endif
+#ifdef CONFIG_RTKM
+		rtkm_kfree(pbuf, sz);
+#else /* !CONFIG_RTKM */
 		kfree(pbuf);
+#endif /* CONFIG_RTKM */
 
 #endif
 #ifdef PLATFORM_FREEBSD
@@ -1828,6 +1840,15 @@ inline bool _rtw_time_after(systime a, systime b)
 #endif
 }
 
+inline bool _rtw_time_after_eq(systime a, systime b)
+{
+#ifdef PLATFORM_LINUX
+	return time_after_eq(a, b);
+#else
+	#error "TBD\n"
+#endif
+}
+
 sysptime rtw_sptime_get(void)
 {
 	/* CLOCK_MONOTONIC */
@@ -3031,11 +3052,7 @@ struct net_device *rtw_alloc_etherdev_with_old_priv(int sizeof_priv, void *old_p
 #endif
 	if (!pnetdev)
 		goto RETURN;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0))
-	pnetdev->min_mtu = WLAN_MIN_ETHFRM_LEN;
-	pnetdev->mtu = WLAN_MAX_ETHFRM_LEN;
-	pnetdev->max_mtu = WLAN_DATA_MAXLEN;
-#endif
+
 	pnpi = netdev_priv(pnetdev);
 	pnpi->priv = old_priv;
 	pnpi->sizeof_priv = sizeof_priv;
@@ -3057,11 +3074,6 @@ struct net_device *rtw_alloc_etherdev(int sizeof_priv)
 	if (!pnetdev)
 		goto RETURN;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0))
-	pnetdev->min_mtu = WLAN_MIN_ETHFRM_LEN;
-	pnetdev->mtu = WLAN_MAX_ETHFRM_LEN;
-	pnetdev->max_mtu = WLAN_DATA_MAXLEN;
-#endif
 	pnpi = netdev_priv(pnetdev);
 
 	pnpi->priv = rtw_zvmalloc(sizeof_priv);

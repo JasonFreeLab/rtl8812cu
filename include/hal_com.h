@@ -179,6 +179,9 @@ typedef enum _WAKEUP_REASON{
 	RX_UNICAST_PKT					= 0x22,
 	RX_PATTERN_PKT					= 0x23,
 	RTD3_SSID_MATCH					= 0x24,
+	MDNS_RX_QUERY_PKT			= 0x2B,
+	MDNS_PASSTHRU_FORWARD_ALL		= 0x2C,
+	MDNS_PASSTHRU_LIST_MATCH		= 0x2D,
 	RX_REALWOW_V2_WAKEUP_PKT		= 0x30,
 	RX_REALWOW_V2_ACK_LOST			= 0x31,
 	ENABLE_FAIL_DMA_IDLE			= 0x40,
@@ -335,7 +338,7 @@ u8 hal_largest_bw(_adapter *adapter, u8 in_bw);
 
 bool hal_chk_wl_func(_adapter *adapter, u8 func);
 
-void hal_com_config_channel_plan(
+void hal_com_parse_channel_plan(
 		PADAPTER padapter,
 		const char *hw_alpha2,
 		u8 hw_chplan,
@@ -418,11 +421,6 @@ void rtw_iface_enable_tsf_update(_adapter *adapter);
 void rtw_iface_disable_tsf_update(_adapter *adapter);
 void rtw_hal_periodic_tsf_update_chk(_adapter *adapter);
 void rtw_hal_periodic_tsf_update_end_timer_hdl(void *ctx);
-#ifdef CONFIG_TX_DUTY
-void rtw_hal_set_tx_duty_cmd(_adapter *adapter);
-void rtw_hal_pause_tx_duty(_adapter *adapter, u8 pause);
-void rtw_hal_tx_duty_chk(_adapter *adapter);
-#endif /* #ifdef CONFIG_TX_DUTY */
 
 #if CONFIG_TX_AC_LIFETIME
 #define TX_ACLT_CONF_DEFAULT	0
@@ -589,6 +587,16 @@ void update_IOT_info(_adapter *padapter);
 void rtw_set_rts_bw(_adapter *padapter);
 #endif/*CONFIG_RTS_FULL_BW*/
 
+enum ctrl_tx_bcn_reason {
+	CTRL_TX_BCN_BY_OTHERS		= 0,
+	CTRL_TX_BCN_BY_SCAN		= 1,
+	CTRL_TX_BCN_BY_JOIN		= 2,
+	CTRL_TX_BCN_BY_CORRECT_TSF	= 3,
+};
+
+void ResumeTxBeacon_with_reason(_adapter *padapter, enum ctrl_tx_bcn_reason reason);
+void StopTxBeacon_with_reason(_adapter *padapter,enum ctrl_tx_bcn_reason reason);
+
 void ResumeTxBeacon(_adapter *padapter);
 void StopTxBeacon(_adapter *padapter);
 
@@ -619,14 +627,13 @@ void StopTxBeacon(_adapter *padapter);
 #define LPSPG_RSVD_PAGE_SET_SEC_CAM_ID8(_rsvd_pag, _value)	SET_BITS_TO_LE_4BYTE(_rsvd_pag+0x0C, 24, 8, _value)/*used Security CAM entry -8*/
 enum lps_pg_hdl_id {
 	LPS_PG_INFO_CFG = 0,
-	LPS_PG_KIP_INFO_CFG,
 	LPS_PG_REDLEMEM,
 	LPS_PG_PHYDM_DIS,
 	LPS_PG_PHYDM_EN,
 };
 
-u8 rtw_hal_set_lps_pg_info_cmd(_adapter *adapter, bool set_kip_info);
-u8 rtw_hal_set_lps_pg_info(_adapter *adapter, bool set_kip_info);
+u8 rtw_hal_set_lps_pg_info_cmd(_adapter *adapter);
+u8 rtw_hal_set_lps_pg_info(_adapter *adapter);
 #endif
 
 int rtw_hal_get_rsvd_page(_adapter *adapter, u32 page_offset, u32 page_num, u8 *buffer, u32 buffer_size);

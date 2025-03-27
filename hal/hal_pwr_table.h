@@ -38,22 +38,32 @@ struct lmt_reg_exc {
 	char reg_name[0];
 };
 
-struct lmt_reg {
-	_list list;
-
-	s8 lmt_2g[MAX_2_4G_BANDWIDTH_NUM]
+struct lmt_2g_t {
+	s8 v[MAX_2_4G_BANDWIDTH_NUM]
 		[TXPWR_LMT_RS_NUM_2G]
 		[CENTER_CH_2G_NUM]
 		[MAX_TX_COUNT];
+};
 
 #if CONFIG_IEEE80211_BAND_5GHZ
-	s8 lmt_5g[MAX_5G_BANDWIDTH_NUM]
+struct lmt_5g_t {
+	s8 v[MAX_5G_BANDWIDTH_NUM]
 		[TXPWR_LMT_RS_NUM_5G]
 		[CENTER_CH_5G_ALL_NUM]
 		[MAX_TX_COUNT];
+};
 #endif
 
-	char name[0];
+struct lmt_reg {
+	_list list;
+
+	struct lmt_2g_t *lmt_2g;
+
+	#if CONFIG_IEEE80211_BAND_5GHZ
+	struct lmt_5g_t *lmt_5g;
+	#endif
+
+	char name[];
 };
 
 struct txpwr_lmt_tb_t {
@@ -91,7 +101,7 @@ struct lmt_reg *_hal_txpwr_lmt_reg_get_by_name(struct hal_com_data *hal_data, co
 struct lmt_reg *hal_txpwr_lmt_reg_get_by_name(struct hal_com_data *hal_data, const char *name);
 void hal_txpwr_set_current_lmt_regs(struct hal_com_data *hal_data, enum band_type band, char *names, int names_len);
 void hal_txpwr_get_current_lmt_regs(struct hal_com_data *hal_data, enum band_type band, char **names, int *names_len);
-bool hal_txpwr_is_current_lmt_reg(struct hal_com_data *hal_data, const char *name);
+bool hal_txpwr_is_current_lmt_reg(struct hal_com_data *hal_data, enum band_type band, const char *name);
 void hal_txpwr_lmt_reg_list_free(struct hal_com_data *hal_data);
 
 void hal_txpwr_lmt_tb_init(struct hal_com_data *hal_data);

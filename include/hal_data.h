@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2022 Realtek Corporation.
+ * Copyright(c) 2007 - 2017 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -36,10 +36,6 @@
 
 #include "../hal/hal_pwr_table.h"
 #include "../hal/hal_dfs.h"
-
-#ifdef CONFIG_BEAMFORMING_MONITOR
-#include "../hal/rtl8822c/rtl8822c_bf_monitor.h"
-#endif
 
 /*
  * <Roger_Notes> For RTL8723 WiFi/BT/GPS multi-function configuration. 2010.10.06.
@@ -228,6 +224,8 @@ struct hal_spec_t {
 	u8 macid_cap;
 	u16 macid_txrpt;
 	u8 macid_txrpt_pgsz;
+
+	u8 txpause_cap; /* TXPAUSE_CAP_XXX */
 
 #ifdef CONFIG_USB_HCI
 	/* A certain HW is designed to take responsibility for replying 0xEA when */
@@ -432,8 +430,6 @@ typedef struct hal_com_data {
 	u8	EEPROMVersion;
 	u8	EEPROMRegulatory;
 	u8	eeprom_thermal_meter;
-	u8	eeprom_thermal_meter_multi[MAX_RF_PATH];
-	u8	eeprom_thermal_offset_temperature;
 	u8	EEPROMBluetoothCoexist;
 	u8	EEPROMBluetoothType;
 	u8	EEPROMBluetoothAntNum;
@@ -469,6 +465,14 @@ typedef struct hal_com_data {
 	u16	EfuseUsedBytes;
 	/*u8		EfuseMap[2][HWSET_MAX_SIZE_JAGUAR];*/
 	EFUSE_HAL	EfuseHal;
+
+	/* channel plan  */
+	char eeprom_alpha2[2];
+	u8 eeprom_chplan;
+#if CONFIG_IEEE80211_BAND_6GHZ
+	u8 eeprom_chplan_6g;
+#endif
+	bool eeprom_force_hw_chplan;
 
 	u8 txpwr_pg_mode; /* enum txpwr_pg_mode */
 
@@ -544,6 +548,9 @@ typedef struct hal_com_data {
 	u16	TypeALNA;
 	u16	TypeAPA;
 	u16	rfe_type;
+#ifdef CONFIG_RTL8822C
+	u8	hw_stype;
+#endif
 
 	u8	bLedOpenDrain; /* Support Open-drain arrangement for controlling the LED. Added by Roger, 2009.10.16. */
 	u32	ac_param_be; /* Original parameter for BE, use for EDCA turbo.	*/
@@ -813,10 +820,6 @@ typedef struct hal_com_data {
 #endif /* RTW_BEAMFORMING_VERSION_2 */
 #endif /* CONFIG_BEAMFORMING */
 
-#ifdef CONFIG_BEAMFORMING_MONITOR
-        struct csi_rpt_monitor csi_rpt_monitor;
-#endif
-
 	u8 not_xmitframe_fw_dl; /*not use xmitframe to download fw*/
 	u8 phydm_op_mode;
 
@@ -840,10 +843,9 @@ typedef struct hal_com_data {
 #endif
 
 	u8 tx_pause[PAUSE_RSON_MAX];
-
-#ifdef CONFIG_FW_DUMP_EFUSE
-	_lock fw_efuse_lock;
-	struct submit_ctx *fw_efuse_sctx;
+#ifdef CONFIG_TX_PAUSE_FW_CTRL
+	_lock tx_pause_sctx_lock;
+	struct submit_ctx *tx_pause_sctx;
 #endif
 
 	_adapter *adapter;

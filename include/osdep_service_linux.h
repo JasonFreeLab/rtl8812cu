@@ -56,6 +56,10 @@
 #include <linux/list.h>
 #include <linux/vmalloc.h>
 
+#ifdef CONFIG_RTKM
+#include "rtw_mem.h"
+#endif /* CONFIG_RTKM */
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
 	#include <uapi/linux/sched/types.h>
 #endif
@@ -159,7 +163,7 @@
  * refs/heads/common-android13-5.15-2023-04 (5.15.94)
  * refs/heads/android13-5.15-lts (5.15.106)
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94) )
+#if (defined(__ANDROID_COMMON_KERNEL__) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94)))
         #define CONFIG_MLD_KERNEL_PATCH
 #endif
 
@@ -303,25 +307,26 @@ __inline static void _exit_critical_ex(_lock *plock, _irqL *pirqL)
 	spin_unlock_irqrestore(plock, *pirqL);
 }
 
-__inline static void _enter_critical_bh(_lock *plock, _irqL *pirqL)
+__inline static void _rtw_spinlock_bh(_lock *plock)
 {
 	spin_lock_bh(plock);
 }
 
-__inline static void _exit_critical_bh(_lock *plock, _irqL *pirqL)
+__inline static void _rtw_spinunlock_bh(_lock *plock)
 {
 	spin_unlock_bh(plock);
 }
 
-__inline static void enter_critical_bh(_lock *plock)
+__inline static int _rtw_spin_is_locked(_lock *plock)
 {
-	spin_lock_bh(plock);
+	return spin_is_locked(plock);
 }
 
-__inline static void exit_critical_bh(_lock *plock)
-{
-	spin_unlock_bh(plock);
-}
+#define enter_critical_bh(plock) _rtw_spinlock_bh(plock)
+#define exit_critical_bh(plock) _rtw_spinunlock_bh(plock)
+
+#define _enter_critical_bh(plock, pirqL) _rtw_spinlock_bh(plock)
+#define _exit_critical_bh(plock, pirqL) _rtw_spinunlock_bh(plock)
 
 __inline static int _rtw_mutex_lock_interruptible(_mutex *pmutex)
 {
@@ -364,13 +369,13 @@ __inline static _list	*get_list_head(_queue	*queue)
 	return &(queue->queue);
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
 static inline void timer_hdl(struct timer_list *in_timer)
 #else
 static inline void timer_hdl(unsigned long cntx)
 #endif
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
 	_timer *ptimer = from_timer(ptimer, in_timer, timer);
 #else
 	_timer *ptimer = (_timer *)cntx;
@@ -383,7 +388,7 @@ __inline static void _init_timer(_timer *ptimer, _nic_hdl nic_hdl, void *pfunc, 
 	ptimer->function = pfunc;
 	ptimer->arg = cntx;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
 	timer_setup(&ptimer->timer, timer_hdl, 0);
 #else
 	/* setup_timer(ptimer, pfunc,(u32)cntx);	 */
@@ -601,7 +606,17 @@ extern struct net_device *rtw_alloc_etherdev(int sizeof_priv);
 #endif
 #endif
 
+#ifndef static_assert
+#define static_assert(expr, ...) __static_assert(expr, ##__VA_ARGS__, #expr)
+#define __static_assert(expr, msg, ...) _Static_assert(expr, msg)
+#endif
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0))
 #define dev_addr_mod(dev, offset, addr, len) _rtw_memcpy(&dev->dev_addr[offset], addr, len)
 #endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0))
+#define dev_addr_mod(dev, offset, addr, len) _rtw_memcpy(&dev->dev_addr[offset], addr, len)
+#endif
+
 #endif /* __OSDEP_LINUX_SERVICE_H_ */

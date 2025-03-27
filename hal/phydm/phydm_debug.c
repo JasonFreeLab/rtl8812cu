@@ -2197,13 +2197,16 @@ void phydm_avg_phy_val_nss(void *dm_void, u8 nss)
 		if (nss == 0 || nss == 1) {
 			*tmp_evm_avg = (u8)(*tmp_evm_sum / *tmp_cnt);
 			evm_rpt_show[0] = *tmp_evm_avg;
-		} else {
+		}
+#if (defined(PHYDM_COMPILE_ABOVE_2SS))
+		else {
 			for (i = 0; i < nss; i++) {
 				tmp_evm_avg[i] = (u8)(tmp_evm_sum[i] /
 						      *tmp_cnt);
 				evm_rpt_show[i] = tmp_evm_avg[i];
 			}
 		}
+#endif
 	}
 
 #if (defined(PHYDM_COMPILE_ABOVE_4SS))
@@ -2750,6 +2753,12 @@ void phydm_basic_dbg_message(void *dm_void)
 			  "is_linked = %d, Num_client = %d, rssi_min = %d, IGI = 0x%x\n",
 			  dm->is_linked, dm->number_linked_client, dm->rssi_min,
 			  dm->dm_dig_table.cur_ig_value);
+
+	#if (RTL8822E_SUPPORT)
+	if (dm->support_ic_type & (ODM_RTL8822E)) {
+		PHYDM_DBG(dm, DBG_CMN, "bt_is_linked = %d, btc_rssi_en = %d, cck_rssi_th = %d, btc_mcs_rssi_en = %d\n", dm->bt_is_linked, dm->btc_rssi_processing, dm->bt_cck_rssi_th, dm->btc_mcs_rssi_en);
+	}
+	#endif
 
 	PHYDM_DBG(dm, DBG_CMN,
 		  "ratio{nhm, nhm_env, clm, idle, tx}={%d, %d, %d, %d, %d}, nhm_pwr=%d\n",

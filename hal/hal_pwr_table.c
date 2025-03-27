@@ -211,7 +211,7 @@ void hal_txpwr_lmt_reg_add_with_nlen(struct hal_com_data *hal_data, const char *
 
 		if (strlen(ent->name) == nlen
 			&& _rtw_memcmp(ent->name, name, nlen) == _TRUE)
-			goto chk_lmt_val;
+			goto chk_lmt_band;
 	}
 
 	/* alloc new one */
@@ -221,34 +221,46 @@ void hal_txpwr_lmt_reg_add_with_nlen(struct hal_com_data *hal_data, const char *
 
 	_rtw_init_listhead(&ent->list);
 	_rtw_memcpy(ent->name, name, nlen);
-	{
-		u8 j, k, l, m;
-
-		for (j = 0; j < MAX_2_4G_BANDWIDTH_NUM; ++j)
-			for (k = 0; k < TXPWR_LMT_RS_NUM_2G; ++k)
-				for (m = 0; m < CENTER_CH_2G_NUM; ++m)
-					for (l = 0; l < MAX_TX_COUNT; ++l)
-						ent->lmt_2g[j][k][m][l] = hal_spec->txgi_max;
-		#if CONFIG_IEEE80211_BAND_5GHZ
-		for (j = 0; j < MAX_5G_BANDWIDTH_NUM; ++j)
-			for (k = 0; k < TXPWR_LMT_RS_NUM_5G; ++k)
-				for (m = 0; m < CENTER_CH_5G_ALL_NUM; ++m)
-					for (l = 0; l < MAX_TX_COUNT; ++l)
-						ent->lmt_5g[j][k][m][l] = hal_spec->txgi_max;
-		#endif
-	}
-
 	rtw_list_insert_tail(&ent->list, &tb->reg_list);
 	tb->reg_num++;
 
-chk_lmt_val:
+chk_lmt_band:
+	if (band == BAND_ON_24G && !ent->lmt_2g) {
+		ent->lmt_2g = rtw_vmalloc(sizeof(*ent->lmt_2g));
+		if (ent->lmt_2g) {
+			u8 j, k, l, m;
+
+			for (j = 0; j < MAX_2_4G_BANDWIDTH_NUM; ++j)
+				for (k = 0; k < TXPWR_LMT_RS_NUM_2G; ++k)
+					for (m = 0; m < CENTER_CH_2G_NUM; ++m)
+						for (l = 0; l < MAX_TX_COUNT; ++l)
+							ent->lmt_2g->v[j][k][m][l] = hal_spec->txgi_max;
+		} else
+			goto release_lock;
+	}
+	#if CONFIG_IEEE80211_BAND_5GHZ
+	else if (band == BAND_ON_5G && !ent->lmt_5g) {
+		ent->lmt_5g = rtw_vmalloc(sizeof(*ent->lmt_5g));
+		if (ent->lmt_5g) {
+			u8 j, k, l, m;
+
+			for (j = 0; j < MAX_5G_BANDWIDTH_NUM; ++j)
+				for (k = 0; k < TXPWR_LMT_RS_NUM_5G; ++k)
+					for (m = 0; m < CENTER_CH_5G_ALL_NUM; ++m)
+						for (l = 0; l < MAX_TX_COUNT; ++l)
+							ent->lmt_5g->v[j][k][m][l] = hal_spec->txgi_max;
+		} else
+			goto release_lock;
+	}
+	#endif
+
 	if (band == BAND_ON_2_4G) {
-		pre_lmt = ent->lmt_2g[bw][tlrs][ch_idx][ntx_idx];
+		pre_lmt = ent->lmt_2g->v[bw][tlrs][ch_idx][ntx_idx];
 		ch = ch_idx + 1;
 	}
 	#if CONFIG_IEEE80211_BAND_5GHZ
 	else if (band == BAND_ON_5G) {
-		pre_lmt = ent->lmt_5g[bw][tlrs - 1][ch_idx][ntx_idx];
+		pre_lmt = ent->lmt_5g->v[bw][tlrs - 1][ch_idx][ntx_idx];
 		ch = center_ch_5g_all[ch_idx];
 	}
 	#endif
@@ -261,10 +273,10 @@ chk_lmt_val:
 
 	lmt = rtw_min(pre_lmt, lmt);
 	if (band == BAND_ON_2_4G)
-		ent->lmt_2g[bw][tlrs][ch_idx][ntx_idx] = lmt;
+		ent->lmt_2g->v[bw][tlrs][ch_idx][ntx_idx] = lmt;
 	#if CONFIG_IEEE80211_BAND_5GHZ
 	else if (band == BAND_ON_5G)
-		ent->lmt_5g[bw][tlrs - 1][ch_idx][ntx_idx] = lmt;
+		ent->lmt_5g->v[bw][tlrs - 1][ch_idx][ntx_idx] = lmt;
 	#endif
 
 	if (0)
@@ -393,21 +405,20 @@ void hal_txpwr_get_current_lmt_regs(struct hal_com_data *hal_data, enum band_typ
 	_rtw_mutex_unlock(&tb->lock);
 }
 
-bool hal_txpwr_is_current_lmt_reg(struct hal_com_data *hal_data, const char *name)
+bool hal_txpwr_is_current_lmt_reg(struct hal_com_data *hal_data, enum band_type band, const char *name)
 {
 	struct txpwr_lmt_tb_t *tb = &hal_data->txpwr_lmt_tb;
-	int band;
 	const char *reg_names, *pos;
 	int reg_names_len;
 
-	for (band = 0; band < BAND_MAX; band++) {
+	if (band < BAND_MAX) {
 		reg_names = tb->cur_reg_names[band];
 		reg_names_len = tb->cur_reg_names_len[band];
-		if (!reg_names)
-			continue;
-		ustrs_for_each_str(reg_names, reg_names_len, pos) {
-			if (strcmp(name, pos) == 0)
-				return true;
+		if (reg_names) {
+			ustrs_for_each_str(reg_names, reg_names_len, pos) {
+				if (strcmp(name, pos) == 0)
+					return true;
+			}
 		}
 	}
 
@@ -429,7 +440,13 @@ void hal_txpwr_lmt_reg_list_free(struct hal_com_data *hal_data)
 		ent = LIST_CONTAINOR(cur, struct lmt_reg, list);
 		cur = get_next(cur);
 		rtw_list_delete(&ent->list);
-		rtw_vmfree((u8 *)ent, sizeof(struct lmt_reg) + strlen(ent->name) + 1);
+		if (ent->lmt_2g)
+			rtw_vmfree(ent->lmt_2g, sizeof(*ent->lmt_2g));
+		#if CONFIG_IEEE80211_BAND_5GHZ
+		if (ent->lmt_5g)
+			rtw_vmfree(ent->lmt_5g, sizeof(*ent->lmt_5g));
+		#endif
+		rtw_vmfree(ent, sizeof(struct lmt_reg) + strlen(ent->name) + 1);
 	}
 	tb->reg_num = 0;
 
@@ -599,16 +616,22 @@ void dump_txpwr_lmt(void *sel, _adapter *adapter)
 					while ((rtw_end_of_queue_search(head, cur)) == _FALSE) {
 						ent = LIST_CONTAINOR(cur, struct lmt_reg, list);
 						cur = get_next(cur);
+						if ((band == BAND_ON_24G && !ent->lmt_2g)
+							#if CONFIG_IEEE80211_BAND_5GHZ
+							|| (band == BAND_ON_5G && !ent->lmt_5g)
+							#endif
+						)
+							continue;
 
 						sprintf(fmt, "%%%zus%%s ", strlen(ent->name) >= 6 ? 1 : 6 - strlen(ent->name));
 						snprintf(tmp_str, TMP_STR_LEN, fmt
-							, hal_txpwr_is_current_lmt_reg(hal_data, ent->name) ? "*" : ""
+							, hal_txpwr_is_current_lmt_reg(hal_data, band, ent->name) ? "*" : ""
 							, ent->name);
 						_RTW_PRINT_SEL(sel, "%s", tmp_str);
 					}
 					sprintf(fmt, "%%%zus%%s ", strlen(txpwr_lmt_str(TXPWR_LMT_WW)) >= 6 ? 1 : 6 - strlen(txpwr_lmt_str(TXPWR_LMT_WW)));
 					snprintf(tmp_str, TMP_STR_LEN, fmt
-						, hal_txpwr_is_current_lmt_reg(hal_data, txpwr_lmt_str(TXPWR_LMT_WW)) ? "*" : ""
+						, hal_txpwr_is_current_lmt_reg(hal_data, band, txpwr_lmt_str(TXPWR_LMT_WW)) ? "*" : ""
 						, txpwr_lmt_str(TXPWR_LMT_WW));
 					_RTW_PRINT_SEL(sel, "%s", tmp_str);
 
@@ -622,11 +645,18 @@ void dump_txpwr_lmt(void *sel, _adapter *adapter)
 						while ((rtw_end_of_queue_search(head, cur)) == _FALSE) {
 							ent = LIST_CONTAINOR(cur, struct lmt_reg, list);
 							cur = get_next(cur);
+							if ((band == BAND_ON_24G && !ent->lmt_2g)
+								#if CONFIG_IEEE80211_BAND_5GHZ
+								|| (band == BAND_ON_5G && !ent->lmt_5g)
+								#endif
+							)
+								continue;
+
 							_RTW_PRINT_SEL(sel, "%3c "
-								, hal_txpwr_is_current_lmt_reg(hal_data, ent->name) ? rf_path_char(path) : ' ');
+								, hal_txpwr_is_current_lmt_reg(hal_data, band, ent->name) ? rf_path_char(path) : ' ');
 						}
 						_RTW_PRINT_SEL(sel, "%3c "
-								, hal_txpwr_is_current_lmt_reg(hal_data, txpwr_lmt_str(TXPWR_LMT_WW)) ? rf_path_char(path) : ' ');
+								, hal_txpwr_is_current_lmt_reg(hal_data, band, txpwr_lmt_str(TXPWR_LMT_WW)) ? rf_path_char(path) : ' ');
 					}
 					_RTW_PRINT_SEL(sel, "\n");
 
@@ -656,6 +686,13 @@ void dump_txpwr_lmt(void *sel, _adapter *adapter)
 						while ((rtw_end_of_queue_search(head, cur)) == _FALSE) {
 							ent = LIST_CONTAINOR(cur, struct lmt_reg, list);
 							cur = get_next(cur);
+							if ((band == BAND_ON_24G && !ent->lmt_2g)
+								#if CONFIG_IEEE80211_BAND_5GHZ
+								|| (band == BAND_ON_5G && !ent->lmt_5g)
+								#endif
+							)
+								continue;
+
 							lmt = phy_get_txpwr_lmt(adapter, ent->name, band, bw, tlrs, ntx_idx, ch, 0);
 							txpwr_idx_get_dbm_str(lmt, hal_spec->txgi_max, hal_spec->txgi_pdbm, strlen(ent->name), tmp_str, TMP_STR_LEN);
 							_RTW_PRINT_SEL(sel, "%s ", tmp_str);
@@ -678,6 +715,13 @@ void dump_txpwr_lmt(void *sel, _adapter *adapter)
 							while ((rtw_end_of_queue_search(head, cur)) == _FALSE) {
 								ent = LIST_CONTAINOR(cur, struct lmt_reg, list);
 								cur = get_next(cur);
+								if ((band == BAND_ON_24G && !ent->lmt_2g)
+									#if CONFIG_IEEE80211_BAND_5GHZ
+									|| (band == BAND_ON_5G && !ent->lmt_5g)
+									#endif
+								)
+									continue;
+
 								lmt_offset = phy_get_txpwr_lmt_diff(adapter, ent->name, band, bw, path, rs, tlrs, ntx_idx, ch, 0);
 								if (lmt_offset == hal_spec->txgi_max) {
 									*(lmt_idx + i * RF_PATH_MAX + path) = hal_spec->txgi_max;

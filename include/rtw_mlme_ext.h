@@ -16,12 +16,13 @@
 #define __RTW_MLME_EXT_H_
 
 
-/*	Commented by Albert 20101105
- *	Increase the SURVEY_TO value from 100 to 150  ( 100ms to 150ms )
- *	The Realtek 8188CE SoftAP will spend around 100ms to send the probe response after receiving the probe request.
- *	So, this driver tried to extend the dwell time for each scanning channel.
- *	This will increase the chance to receive the probe response from SoftAP. */
+/*
+ * SURVEY_TO: dwell time (ms) for passive channel scan or other scan functions
+ * in addition to normal scan.
+ * ACTIVE_CH_SURVEY_TO: dwell time (ms) for active scan channel in nomal scan.
+ */
 #define SURVEY_TO		(100)
+#define ACTIVE_CH_SURVEY_TO	(50)
 
 #define REAUTH_TO		(300) /* (50) */
 #define REASSOC_TO		(300) /* (50) */
@@ -340,17 +341,13 @@ struct mlme_ext_info {
 #ifdef CONFIG_WRITE_BCN_LEN_TO_FW
 	u16 last_bcn_len;
 #endif
-
-	u8	slottime_override_en;
-	u8	slottime_override;
-	u8	sifs_override_en;
-	u8	sifs_override;
 };
+
+void init_channel_list(_adapter *padapter);
 
 int rtw_rfctl_init(_adapter *adapter);
 void rtw_rfctl_deinit(_adapter *adapter);
-void rtw_rfctl_chplan_init(_adapter *adapter);
-void rtw_rfctl_update_op_mode(struct rf_ctl_t *rfctl, u8 ifbmp_mod, u8 if_op);
+void rtw_rfctl_update_op_mode(struct rf_ctl_t *rfctl, u8 ifbmp_mod, u8 if_op, u8 ifbmp_excl);
 
 bool rtw_mlme_band_check(_adapter *adapter, const u32 ch);
 
@@ -714,7 +711,8 @@ int rtw_get_bcn_keys(_adapter *adapter, u8 *whdr, u32 flen, struct beacon_keys *
 int rtw_get_bcn_keys_from_bss(WLAN_BSSID_EX *bss, struct beacon_keys *bcn_keys);
 int rtw_update_bcn_keys_of_network(struct wlan_network *network);
 
-int validate_beacon_len(u8 *pframe, uint len);
+int check_ielen(u8 *start, uint len);
+int validate_bcn_and_probe_rsp_len(u8 *pframe, uint len);
 void rtw_dump_bcn_keys(void *sel, struct beacon_keys *recv_beacon);
 void rtw_bcn_key_err_fix(struct beacon_keys *cur, struct beacon_keys *recv);
 bool rtw_bcn_key_compare(struct beacon_keys *cur, struct beacon_keys *recv);
@@ -728,6 +726,7 @@ void update_wireless_mode(_adapter *padapter);
 void update_tx_basic_rate(_adapter *padapter, u8 modulation);
 void update_sta_basic_rate(struct sta_info *psta, u8 wireless_mode);
 int rtw_ies_get_supported_rate(u8 *ies, uint ies_len, u8 *rate_set, u8 *rate_num);
+int rtw_elems_get_supported_rate(struct rtw_ieee802_11_elems *elems, u8 *rate_set, u8 *rate_num);
 
 /* for sta/adhoc mode */
 void update_sta_info(_adapter *padapter, struct sta_info *psta);
@@ -835,7 +834,7 @@ void update_mgntframe_subtype(_adapter *padapter, struct xmit_frame *pmgntframe)
 #endif
 void update_mgntframe_attrib(_adapter *padapter, struct pkt_attrib *pattrib);
 void update_mgntframe_attrib_addr(_adapter *padapter, struct xmit_frame *pmgntframe);
-s32 dump_mgntframe(_adapter *padapter, struct xmit_frame *pmgntframe);
+void dump_mgntframe(_adapter *padapter, struct xmit_frame *pmgntframe);
 s32 dump_mgntframe_and_wait(_adapter *padapter, struct xmit_frame *pmgntframe, int timeout_ms);
 s32 dump_mgntframe_and_wait_ack(_adapter *padapter, struct xmit_frame *pmgntframe);
 s32 dump_mgntframe_and_wait_ack_timeout(_adapter *padapter, struct xmit_frame *pmgntframe, int timeout_ms);
@@ -861,9 +860,9 @@ void issue_probereq(_adapter *padapter, const NDIS_802_11_SSID *pssid, const u8 
 s32 issue_probereq_ex(_adapter *padapter, const NDIS_802_11_SSID *pssid, const u8 *da, u8 ch, bool append_wps, int try_cnt, int wait_ms);
 int issue_nulldata(_adapter *padapter, unsigned char *da, unsigned int power_mode, int try_cnt, int wait_ms);
 int issue_qos_nulldata(_adapter *padapter, unsigned char *da, u16 tid, u8 ps, int try_cnt, int wait_ms);
+int issue_disasoc(_adapter *adapter, unsigned char *da, unsigned short reason);
 int issue_deauth(_adapter *padapter, unsigned char *da, unsigned short reason);
 int issue_deauth_ex(_adapter *padapter, u8 *da, unsigned short reason, int try_cnt, int wait_ms);
-void issue_action_spct_ch_switch(_adapter *padapter, u8 *ra, u8 new_ch, u8 ch_offset);
 void issue_addba_req(_adapter *adapter, unsigned char *ra, u8 tid);
 void issue_addba_rsp(_adapter *adapter, unsigned char *ra, u8 tid, u16 status, u8 size);
 u8 issue_addba_rsp_wait_ack(_adapter *adapter, unsigned char *ra, u8 tid, u16 status, u8 size, int try_cnt, int wait_ms);
@@ -1097,7 +1096,7 @@ u8 rtw_mesh_set_plink_state_cmd_hdl(_adapter *adapter, u8 *parmbuf) { return H2C
 #endif
 
 struct rtw_cmd wlancmds[] = {
-	GEN_MLME_EXT_HANDLER(join_cmd_hdl, rtw_joinbss_cmd_callback) /*CMD_JOINBSS*/
+	GEN_MLME_EXT_HANDLER(join_cmd_hdl, NULL) /*CMD_JOINBSS*/
 	GEN_MLME_EXT_HANDLER(disconnect_hdl, rtw_disassoc_cmd_callback) /*CMD_DISCONNECT*/
 	GEN_MLME_EXT_HANDLER(createbss_hdl, NULL) /*CMD_CREATE_BSS*/
 	GEN_MLME_EXT_HANDLER(setopmode_hdl, NULL) /*CMD_SET_OPMODE*/
@@ -1120,7 +1119,7 @@ struct rtw_cmd wlancmds[] = {
 	GEN_MLME_EXT_HANDLER(rm_post_event_hdl, NULL) /*CMD_RM_POST_EVENT*/
 	GEN_MLME_EXT_HANDLER(rtw_mesh_set_plink_state_cmd_hdl, NULL) /*CMD_SET_MESH_PLINK_STATE*/
 	GEN_MLME_EXT_HANDLER(rtw_iqk_hdl, NULL) /*CMD_DO_IQK*/
-	GEN_MLME_EXT_HANDLER(rtw_get_chplan_hdl, NULL) /* CMD_GET_CHANPLAN */
+	GEN_MLME_EXT_HANDLER(rtw_get_chplan_hdl, rtw_get_chplan_callback) /* CMD_GET_CHANPLAN */
 	GEN_MLME_EXT_HANDLER(rtw_write_bcnlen_hdl, NULL) /* CMD_WRITE_BCN_LEN */
 	GEN_MLME_EXT_HANDLER(set_ap_csa_hdl, NULL) /* CMD_AP_CHANSWITCH */
 	GEN_MLME_EXT_HANDLER(rtw_reqtxrpt_cmd_hdl, NULL) /* CMD_REQ_TXRPT */
@@ -1161,7 +1160,7 @@ static struct rtw_event wlanevents[] = {
 	#ifdef CONFIG_IEEE80211W
 	{sizeof(struct stadel_event), &rtw_sta_timeout_event_callback}, /*EVT_TIMEOUT_STA*/
 	#endif /* CONFIG_IEEE80211W */
-	#ifdef CONFIG_RTW_80211R
+	#if defined(CONFIG_IOCTL_CFG80211) && defined(CONFIG_RTW_80211R)
 	{sizeof(struct stassoc_event), &rtw_ft_reassoc_event_callback}, /*EVT_FT_REASSOC*/
 	#endif
 };

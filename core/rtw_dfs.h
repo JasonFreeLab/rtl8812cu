@@ -48,9 +48,9 @@ RTW_FUNC_2G_5G_ONLY bool rtw_chset_is_ch_non_ocp(const struct rtw_chset *chset, 
 bool rtw_chset_is_bchbw_non_ocp(const struct rtw_chset *chset, enum band_type band, u8 ch, u8 bw, u8 offset);
 bool rtw_chset_is_bch_non_ocp(const struct rtw_chset *chset, enum band_type band, u8 ch);
 
-bool rtw_chset_update_non_ocp_ms_by_band(struct rtw_chset *chset, enum band_type band, u8 ch, u8 bw, u8 offset, int ms);
-
 void rtw_rfctl_chset_chk_non_ocp_finish(struct rf_ctl_t *rfctl);
+
+void rtw_rfctl_force_update_non_ocp_ms(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset, int ms);
 
 u32 rtw_get_ch_waiting_ms(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset, u32 *r_non_ocp_ms, u32 *r_cac_ms);
 
@@ -58,9 +58,11 @@ u32 rtw_force_stop_cac(struct rf_ctl_t *rfctl, u32 timeout_ms);
 
 u8 rtw_dfs_rd_hdl(struct dvobj_priv *dvobj, enum phl_band_idx hwband, u8 radar_cch, enum channel_width radar_bw);
 
-void rtw_dfs_rd_en_dec_on_mlme_act(_adapter *adapter, struct _ADAPTER_LINK *alink, u8 mlme_act, u8 excl_ifbmp);
 void rtw_dfs_rd_en_dec_update(struct dvobj_priv *dvobj, enum phl_band_idx hwband);
 u8 rtw_dfs_rd_en_decision_cmd(struct dvobj_priv *dvobj, enum phl_band_idx hwband);
+
+void rtw_indicate_cac_state_on_bss_start(_adapter *adapter);
+void rtw_indicate_cac_state_on_bss_stop(_adapter *adapter);
 
 #else
 #define CH_IS_NON_OCP(rt_ch_info) 0
@@ -74,14 +76,19 @@ RTW_FUNC_2G_5G_ONLY static inline bool rtw_chset_is_ch_non_ocp(const struct rtw_
 #define rtw_chset_is_bch_non_ocp(chset, band, ch) false
 #endif /* CONFIG_DFS_MASTER */
 
+#if CONFIG_DFS && CONFIG_IEEE80211_BAND_5GHZ
+void rtw_dfs_rd_en_dec_on_mlme_act(_adapter *adapter, struct _ADAPTER_LINK *alink, u8 mlme_act, u8 excl_ifbmp);
+void dump_radar_detect_status(void *sel, struct rf_ctl_t *rfctl, const char *title);
+#endif
+
 bool rtw_rfctl_choose_bchbw(struct rf_ctl_t *rfctl
-	, enum band_type sel_band, u8 sel_ch, u8 max_bw
-	, enum band_type cur_band, u8 cur_ch
+	, enum band_type sel_band, u8 sel_ch, u8 max_bw, enum chan_offset sel_offset
+	, enum band_type cur_band, u8 cur_ch, enum chan_offset cur_offset
 	, enum band_type *band, u8 *ch, u8 *bw, u8 *offset
 	, bool by_int_info, u8 mesh_only, const char *caller);
 
-RTW_FUNC_2G_5G_ONLY bool rtw_rfctl_choose_chbw(struct rf_ctl_t *rfctl, u8 sel_ch, u8 max_bw, u8 cur_ch
-	, u8 *ch, u8 *bw, u8 *offset, bool by_int_info, u8 mesh_only, const char *caller);
+RTW_FUNC_2G_5G_ONLY bool rtw_rfctl_choose_chbw(struct rf_ctl_t *rfctl, u8 sel_ch, u8 max_bw, enum chan_offset sel_offset
+	, u8 cur_ch, enum chan_offset cur_offset, u8 *ch, u8 *bw, u8 *offset, bool by_int_info, u8 mesh_only, const char *caller);
 
 void rtw_rfctl_dfs_init(struct rf_ctl_t *rfctl, struct registry_priv *regsty);
 

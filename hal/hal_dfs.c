@@ -55,6 +55,13 @@ struct dfs_rd_ctl_param {
 	s16 sp_ch;
 	enum channel_width sp_bw;
 	enum chan_offset sp_offset;
+
+	/*
+	* configuration for specific radar detect range in freqency, valid when sp_ch < 0
+	* 0: not set (keep original)
+	*/
+	u32 sp_freq_hi;
+	u32 sp_freq_lo;
 };
 
 static bool hal_bchbw_in_radar_domain(enum band_type band, u8 ch
@@ -345,18 +352,36 @@ hal_dfs_rd_ctl_hdl(struct hal_com_data *hal_data, struct dfs_rd_ctl_param *rd_ct
 				, rd_ctl_param->sp_ch, rd_ctl_param->sp_bw, rd_ctl_param->sp_offset
 				, &hi, &lo)
 		) {
-			RTW_INFO("%s sp_ch:%u,%d,%d is set\n", __func__
-				, rd_ctl_param->sp_ch, rd_ctl_param->sp_bw, rd_ctl_param->sp_offset);
-			dfs_info->sp_detect_range_hi = hi;
-			dfs_info->sp_detect_range_lo = lo;
+			if (dfs_info->sp_detect_range_hi != hi || dfs_info->sp_detect_range_lo != lo) {
+				RTW_INFO("%s sp_ch:%u,%d,%d is set\n", __func__
+					, rd_ctl_param->sp_ch, rd_ctl_param->sp_bw, rd_ctl_param->sp_offset);
+				dfs_info->sp_detect_range_hi = hi;
+				dfs_info->sp_detect_range_lo = lo;
+			}
 		} else {
 			RTW_WARN("%s sp_ch:%u,%d,%d to freq range fail, all range applied\n", __func__
 				, rd_ctl_param->sp_ch, rd_ctl_param->sp_bw, rd_ctl_param->sp_offset);
 			dfs_info->sp_detect_range_hi = 0;
 		}
 	} else if (rd_ctl_param->sp_ch == 0) {
-		RTW_INFO("%s all range applied\n", __func__);
-		dfs_info->sp_detect_range_hi = 0;
+		if (dfs_info->sp_detect_range_hi != 0) {
+			RTW_INFO("%s all range applied\n", __func__);
+			dfs_info->sp_detect_range_hi = 0;
+		}
+	} else if (rd_ctl_param->sp_freq_hi) {
+		if (rd_ctl_param->sp_freq_hi <= rd_ctl_param->sp_freq_lo) {
+			RTW_WARN("%s sp_freq_hi:%u <= sp_freq_lo:%u, all range applied\n", __func__
+				, rd_ctl_param->sp_freq_hi, rd_ctl_param->sp_freq_lo);
+		} else {
+			if (dfs_info->sp_detect_range_hi != rd_ctl_param->sp_freq_hi
+				|| dfs_info->sp_detect_range_lo != rd_ctl_param->sp_freq_lo
+			) {
+				RTW_INFO("%s sp_freq %u to %u is set\n", __func__
+					, rd_ctl_param->sp_freq_lo, rd_ctl_param->sp_freq_hi);
+				dfs_info->sp_detect_range_hi = rd_ctl_param->sp_freq_hi;
+				dfs_info->sp_detect_range_lo = rd_ctl_param->sp_freq_lo;
+			}
+		}
 	}
 
 apply:
@@ -366,7 +391,8 @@ apply:
 
 static int
 _rtw_hal_dfs_rd_ctl(struct hal_com_data *hal_data, enum phl_band_idx hw_band
-	, enum phydm_dfs_region_domain domain, bool enable, s8 cac, s16 sp_ch, enum channel_width sp_bw, enum chan_offset sp_offset)
+	, enum phydm_dfs_region_domain domain, bool enable, s8 cac, s16 sp_ch, enum channel_width sp_bw, enum chan_offset sp_offset
+	, u32 sp_freq_hi, u32 sp_freq_lo)
 {
 	int ret;
 	struct dfs_rd_ctl_param param;
@@ -377,6 +403,8 @@ _rtw_hal_dfs_rd_ctl(struct hal_com_data *hal_data, enum phl_band_idx hw_band
 	param.sp_ch = sp_ch;
 	param.sp_bw = sp_bw;
 	param.sp_offset = sp_offset;
+	param.sp_freq_hi = sp_freq_hi;
+	param.sp_freq_lo = sp_freq_lo;
 
 	ret = hal_dfs_rd_ctl_hdl(hal_data, &param);
 
@@ -394,7 +422,7 @@ rtw_hal_dfs_change_domain(struct hal_com_data *hal_data, enum phl_band_idx hw_ba
 
 	return _rtw_hal_dfs_rd_ctl(hal_data, hw_band
 		, domain /* change domain, other parameters will be ignored */
-		, false, 0, -1, 0, 0);
+		, false, 0, -1, 0, 0, 0, 0);
 }
 
 int
@@ -403,7 +431,7 @@ rtw_hal_dfs_rd_enable_all_range(struct hal_com_data *hal_data, enum phl_band_idx
 	return _rtw_hal_dfs_rd_ctl(hal_data, hw_band
 		, PHYDM_DFS_DOMAIN_NUM
 		, true, -1 /* enable radar detect w/o changing CAC status */
-		, 0, 0, 0);
+		, 0, 0, 0, 0, 0);
 }
 
 int
@@ -412,7 +440,16 @@ rtw_hal_dfs_rd_enable_with_sp_chbw(struct hal_com_data *hal_data, enum phl_band_
 {
 	return _rtw_hal_dfs_rd_ctl(hal_data, hw_band
 		, PHYDM_DFS_DOMAIN_NUM
-		, true, cac ? 1 : 0, sp_ch, sp_bw, sp_offset);
+		, true, cac ? 1 : 0, sp_ch, sp_bw, sp_offset, 0, 0);
+}
+
+int
+rtw_hal_dfs_rd_enable_with_sp_freq_range(struct hal_com_data *hal_data, enum phl_band_idx hw_band
+	, bool cac, u32 sp_freq_hi, u32 sp_freq_lo)
+{
+	return _rtw_hal_dfs_rd_ctl(hal_data, hw_band
+		, PHYDM_DFS_DOMAIN_NUM
+		, true, cac ? 1 : 0, -1, 0, 0, sp_freq_hi, sp_freq_lo);
 }
 
 int
@@ -421,7 +458,7 @@ rtw_hal_dfs_rd_set_cac_status(struct hal_com_data *hal_data, enum phl_band_idx h
 	return _rtw_hal_dfs_rd_ctl(hal_data, hw_band
 		, PHYDM_DFS_DOMAIN_NUM
 		, true /* CAC status only valid when radar detect enable */
-		, cac ? 1 : 0, -1, 0, 0);
+		, cac ? 1 : 0, -1, 0, 0, 0, 0);
 }
 
 int
@@ -429,6 +466,6 @@ rtw_hal_dfs_rd_disable(struct hal_com_data *hal_data, enum phl_band_idx hw_band)
 {
 	return _rtw_hal_dfs_rd_ctl(hal_data, hw_band
 		, PHYDM_DFS_DOMAIN_NUM
-		, false, 0, -1, 0, 0);
+		, false, 0, -1, 0, 0, 0, 0);
 }
 #endif

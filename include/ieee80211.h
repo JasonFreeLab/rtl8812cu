@@ -821,6 +821,7 @@ struct ieee80211_snap_hdr {
 #define IEEE80211_OFDM_RATE_36MB		0x48
 #define IEEE80211_OFDM_RATE_48MB		0x60
 #define IEEE80211_OFDM_RATE_54MB		0x6C
+#define IEEE80211_BSS_MEMBERSHIP_SELECTOR_SAE_H2E_ONLY 0x7B
 #define IEEE80211_BASIC_RATE_MASK		0x80
 
 #define IEEE80211_CCK_RATE_1MB_MASK		(1<<0)
@@ -1867,6 +1868,14 @@ struct rtw_ieee802_11_elems {
 	u8 *tbtx_cap;
 	u8 tbtx_cap_len;
 #endif
+#ifdef CONFIG_STA_MULTIPLE_BSSID
+	u8 *mbssid;
+	u8 mbssid_len;
+
+	/* exist in nontransmitted bssid profile */
+	u8 *non_tx_bssid_cap;
+	u8 non_tx_bssid_cap_len;
+#endif
 };
 
 typedef enum { ParseOK = 0, ParseUnknown = 1, ParseFailed = -1 } ParseRes;
@@ -1874,6 +1883,12 @@ typedef enum { ParseOK = 0, ParseUnknown = 1, ParseFailed = -1 } ParseRes;
 ParseRes rtw_ieee802_11_parse_elems(u8 *start, uint len,
 				struct rtw_ieee802_11_elems *elems,
 				int show_errors);
+
+#ifdef CONFIG_STA_MULTIPLE_BSSID
+ParseRes rtw_ieee802_11_override_elems_by_mbssid(
+	u8 *mbssid_ie, uint mbssid_ie_len, u8 mbssid_idx, struct rtw_ieee802_11_elems *elems
+	, int show_errors);
+#endif
 
 u8 *rtw_set_fixed_ie(unsigned char *pbuf, unsigned int len, unsigned char *source, unsigned int *frlen);
 u8 *rtw_set_ie(u8 *pbuf, sint index, uint len, const u8 *source, uint *frlen);
@@ -1974,8 +1989,7 @@ void dump_ies(void *sel, const u8 *buf, u32 buf_len);
 #ifdef CONFIG_80211N_HT
 #define HT_SC_OFFSET_MAX 4
 extern const char *const _ht_sc_offset_str[];
-/* #define ht_sc_offset_str(sc) (((sc) >= HT_SC_OFFSET_MAX) ? _ht_sc_offset_str[2] : _ht_sc_offset_str[(sc)]) */
-#define ht_sc_offset_str(sc) (_ht_sc_offset_str[(sc)])
+#define ht_sc_offset_str(sc) (((sc) >= HT_SC_OFFSET_MAX) ? _ht_sc_offset_str[2] : _ht_sc_offset_str[(sc)])
 
 void dump_ht_cap_ie_content(void *sel, const u8 *buf, u32 buf_len);
 #endif
@@ -2054,6 +2068,7 @@ u8 rtw_ht_cap_get_tx_nss(u8 *ht_cap);
 int rtw_action_frame_parse(const u8 *frame, u32 frame_len, u8 *category, u8 *action);
 const char *action_public_str(u8 action);
 
+u8 key_char2num(u8 ch);
 u8 key_2char2num(u8 hch, u8 lch);
 u8 str_2char2num(u8 hch, u8 lch);
 void macstr2num(u8 *dst, u8 *src);

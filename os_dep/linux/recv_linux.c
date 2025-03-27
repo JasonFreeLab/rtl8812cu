@@ -217,7 +217,7 @@ static int sdio_init_recvbuf_with_skb(struct recv_priv *recvpriv, struct recv_bu
 {
 #ifdef CONFIG_PREALLOC_RX_SKB_BUFFER
 	if (RBUF_IS_PREALLOC(rbuf)) {
-		rbuf->pskb = rtw_alloc_skb_premem(size);
+		rbuf->pskb = rtkm_alloc_skb(size);
 		if (!rbuf->pskb) {
 			RTW_WARN("%s: Fail to get pre-alloc skb! size=%d\n", __func__, size);
 			return _FAIL;
@@ -328,9 +328,10 @@ int rtw_os_recvbuf_resource_free(_adapter *padapter, struct recv_buf *precvbuf)
 
 	if (precvbuf->pskb) {
 #ifdef CONFIG_PREALLOC_RX_SKB_BUFFER
-		if (rtw_free_skb_premem(precvbuf->pskb) != 0)
+		rtkm_kfree_skb_any(precvbuf->pskb);
+#else
+		rtw_skb_free(precvbuf->pskb);
 #endif
-			rtw_skb_free(precvbuf->pskb);
 	}
 	return ret;
 

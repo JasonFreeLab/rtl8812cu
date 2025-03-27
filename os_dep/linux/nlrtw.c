@@ -420,13 +420,19 @@ int rtw_nlrtw_radar_detect_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 cch, u8
 	return _rtw_nlrtw_radar_event(rfctl, band_idx, NLRTW_RADAR_DETECTED, BAND_ON_5G, cch, bw);
 }
 
-int rtw_nlrtw_cac_finish_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 cch, u8 bw)
+int rtw_nlrtw_cac_finish_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 ifbmp, u8 cch, u8 bw)
 {
+	if (ifbmp != 0xFF)
+		return 0;
+	/* only accept all iface event */
 	return _rtw_nlrtw_radar_event(rfctl, band_idx, NLRTW_RADAR_CAC_FINISHED, BAND_ON_5G, cch, bw);
 }
 
-int rtw_nlrtw_cac_abort_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 cch, u8 bw)
+int rtw_nlrtw_cac_abort_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 ifbmp, u8 cch, u8 bw)
 {
+	if (ifbmp != 0xFF)
+		return 0;
+	/* only accept all iface event */
 	return _rtw_nlrtw_radar_event(rfctl, band_idx, NLRTW_RADAR_CAC_ABORTED, BAND_ON_5G, cch, bw);
 }
 

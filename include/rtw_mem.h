@@ -15,15 +15,20 @@
 #ifndef __RTW_MEM_H__
 #define __RTW_MEM_H__
 
-#include <drv_conf.h>
-#include <basic_types.h>
-#include <osdep_service.h>
+#define RTKM_MGMT_SIZE PAGE_SIZE
 
-u16 rtw_rtkm_get_buff_size(void);
-u8 rtw_rtkm_get_nr_recv_skb(void);
-struct u8 *rtw_alloc_revcbuf_premem(void);
-struct sk_buff *rtw_alloc_skb_premem(u16 in_size);
-int rtw_free_skb_premem(struct sk_buff *pskb);
+void *rtkm_kmalloc(size_t size, gfp_t flags);
+void *rtkm_kzalloc(size_t size, gfp_t flags);
+void rtkm_kfree(const void *objp, size_t size);
 
+int rtkm_prealloc_init(void);
+void rtkm_prealloc_destroy(void);
+void rtkm_dump_mstatus(void *sel);
+void rtkm_set_trace(unsigned int mask);
+
+u16 rtkm_get_max_buff_size(void);
+u8 rtkm_get_max_nr_rx_skb(void);
+inline struct sk_buff *rtkm_alloc_skb(unsigned int length);
+void rtkm_kfree_skb_any(struct sk_buff *skb);
 
 #endif /* __RTW_MEM_H__ */

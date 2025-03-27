@@ -194,13 +194,13 @@ u32 _halrf_get_efuse_tssi_offset_8822c(
 		offset_index = 9;
 	else if (channel >= 12 && channel <= 14)
 		offset_index = 10;
-	else if (channel >= 16 && channel <= 40)
+	else if (channel >= 36 && channel <= 40)
 		offset_index = 11;
 	else if (channel >= 42 && channel <= 48)
 		offset_index = 12;
 	else if (channel >= 50 && channel <= 58)
 		offset_index = 13;
-	else if (channel >= 60 && channel <= 98)
+	else if (channel >= 60 && channel <= 64)
 		offset_index = 14;
 	else if (channel >= 100 && channel <= 104)
 		offset_index = 15;
@@ -220,7 +220,7 @@ u32 _halrf_get_efuse_tssi_offset_8822c(
 		offset_index = 22;
 	else if (channel >= 163 && channel <= 169)
 		offset_index = 23;
-	else if (channel >= 171 && channel <= 253)
+	else if (channel >= 171 && channel <= 177)
 		offset_index = 24;
 
 	offset = (u32)tssi->tssi_efuse[path][offset_index];
@@ -244,11 +244,11 @@ s8 _halrf_get_kfree_tssi_offset_8822c(
 
 	if (channel >= 1 && channel <= 14)
 		offset_index = 0;
-	else if (channel >= 16 && channel <= 96)
+	else if (channel >= 36 && channel <= 64)
 		offset_index = 1;
 	else if (channel >= 100 && channel <= 144)
 		offset_index = 2;
-	else if (channel >= 149 && channel <= 253)
+	else if (channel >= 149 && channel <= 177)
 		offset_index = 3;
 
 	return offset = tssi->tssi_kfree_efuse[0][offset_index];
@@ -313,7 +313,7 @@ void _halrf_calculate_set_thermal_codeword_8822c(
 		odm_move_memory(dm, thermal_down_a, cali_info->delta_swing_table_idx_2ga_n, sizeof(thermal_down_a));
 		odm_move_memory(dm, thermal_up_b, cali_info->delta_swing_table_idx_2gb_p, sizeof(thermal_up_b));
 		odm_move_memory(dm, thermal_down_b, cali_info->delta_swing_table_idx_2gb_n, sizeof(thermal_down_b));
-	} else if (channel >= 16 && channel <= 96) {
+	} else if (channel >= 36 && channel <= 64) {
 		odm_move_memory(dm, thermal_up_a, cali_info->delta_swing_table_idx_5ga_p[0], sizeof(thermal_up_a));
 		odm_move_memory(dm, thermal_down_a, cali_info->delta_swing_table_idx_5ga_n[0], sizeof(thermal_down_a));
 		odm_move_memory(dm, thermal_up_b, cali_info->delta_swing_table_idx_5gb_p[0], sizeof(thermal_up_b));
@@ -323,7 +323,7 @@ void _halrf_calculate_set_thermal_codeword_8822c(
 		odm_move_memory(dm, thermal_down_a, cali_info->delta_swing_table_idx_5ga_n[1], sizeof(thermal_down_a));
 		odm_move_memory(dm, thermal_up_b, cali_info->delta_swing_table_idx_5gb_p[1], sizeof(thermal_up_b));
 		odm_move_memory(dm, thermal_down_b, cali_info->delta_swing_table_idx_5gb_n[1], sizeof(thermal_down_b));
-	} else if (channel >= 149 && channel <= 253) {
+	} else if (channel >= 149 && channel <= 177) {
 		odm_move_memory(dm, thermal_up_a, cali_info->delta_swing_table_idx_5ga_p[2], sizeof(thermal_up_a));
 		odm_move_memory(dm, thermal_down_a, cali_info->delta_swing_table_idx_5ga_n[2], sizeof(thermal_down_a));
 		odm_move_memory(dm, thermal_up_b, cali_info->delta_swing_table_idx_5gb_p[2], sizeof(thermal_up_b));
@@ -2241,15 +2241,11 @@ void halrf_get_efuse_thermal_pwrtype_8822c(
 	tssi->thermal[RF_PATH_B] = (u8)thermal_tmp;
 
 	/*power tracking type*/
-#if 0
 	odm_efuse_logical_map_read(dm, 1, 0xc8, &pg_tmp);
 	if (((pg_tmp >> 4) & 0xf) == 0xf)
 		rf->power_track_type = 0x0;
 	else
 		rf->power_track_type = (u8)((pg_tmp >> 4) & 0xf);
-#endif
-
-	rf->power_track_type = 0x0;
 
 	RF_DBG(dm, DBG_RF_TX_PWR_TRACK,
 	       "===>%s thermal pahtA=0x%x pahtB=0x%x power_track_type=0x%x\n",

@@ -1030,7 +1030,7 @@ void rtw_lps_rfon_ctrl(_adapter *padapter, u8 rfon_ctrl)
 			if (MLME_IS_ASOC(padapter)) {
 #ifdef CONFIG_LPS_PG
 				if (pwrpriv->lps_level == LPS_PG) {
-						 if (rtw_hal_set_lps_pg_info_cmd(padapter, _FALSE) == _FAIL)
+						 if (rtw_hal_set_lps_pg_info_cmd(padapter) == _FAIL)
 						 	RTW_INFO(FUNC_ADPT_FMT": Send PG H2C command Fail! \n", 
 						 			    FUNC_ADPT_ARG(padapter));
 				}
@@ -1128,7 +1128,7 @@ void rtw_set_ps_mode(PADAPTER padapter, u8 ps_mode, u8 smart_ps, u8 bcn_ant_mode
 #ifdef CONFIG_LPS_PG
 	if ((PS_MODE_ACTIVE != ps_mode) && (pwrpriv->lps_level == LPS_PG)) {
 		if (pwrpriv->wowlan_mode != _TRUE) {
-				/*rtw_hal_set_lps_pg_info(padapter, _FALSE);*/
+				/*rtw_hal_set_lps_pg_info(padapter);*/
 				lps_pg_hdl_id = LPS_PG_INFO_CFG;
 				rtw_hal_set_hwreg(padapter, HW_VAR_LPS_PG_HANDLE, (u8 *)(&lps_pg_hdl_id));
 		}
@@ -1227,10 +1227,6 @@ void rtw_set_ps_mode(PADAPTER padapter, u8 ps_mode, u8 smart_ps, u8 bcn_ant_mode
 #ifdef CONFIG_LPS_PG
 			if (pwrpriv->lps_level == LPS_PG) {
 				lps_pg_hdl_id = LPS_PG_PHYDM_EN;
-				rtw_hal_set_hwreg(padapter, HW_VAR_LPS_PG_HANDLE, (u8 *)(&lps_pg_hdl_id));
-
-				/* Download KIP info via RsvdPage if necessary */
-				lps_pg_hdl_id = LPS_PG_KIP_INFO_CFG;
 				rtw_hal_set_hwreg(padapter, HW_VAR_LPS_PG_HANDLE, (u8 *)(&lps_pg_hdl_id));
 			}
 #endif
@@ -1635,11 +1631,7 @@ void LeaveAllPowerSaveMode(PADAPTER Adapter)
 #endif /* CONFIG_P2P_PS */
 
 #ifdef CONFIG_LPS
-#ifdef CONFIG_LPS_LCLK
-		rtw_lps_ctrl_wk_cmd(Adapter, LPS_CTRL_LEAVE, 0);
-#else /* !CONFIG_LPS_LCLK */
-		rtw_lps_ctrl_wk_cmd(Adapter, LPS_CTRL_LEAVE, RTW_CMDF_DIRECTLY);
-#endif /* CONFIG_LPS_LCLK */
+		rtw_lps_ctrl_wk_cmd(Adapter, LPS_CTRL_LEAVE, enqueue ? 0 : RTW_CMDF_DIRECTLY);
 #endif
 
 #ifdef CONFIG_LPS_LCLK
@@ -2351,6 +2343,7 @@ void rtw_init_pwrctrl_priv(PADAPTER padapter)
 #endif
 #ifdef CONFIG_GPIO_WAKEUP
 	PHAL_DATA_TYPE pHalData = GET_HAL_DATA(padapter);
+	u8 val8 = 0;
 #endif
 
 #if defined(CONFIG_CONCURRENT_MODE)
@@ -2435,9 +2428,6 @@ void rtw_init_pwrctrl_priv(PADAPTER padapter)
 	#if (defined(CONFIG_RTL8822C) || defined(CONFIG_RTL8822E))
 	pwrctrlpriv->lpspg_dpk_info.name = "LPSPG_DPK_INFO";
 	pwrctrlpriv->lpspg_iqk_info.name = "LPSPG_IQK_INFO";
-	#if defined(CONFIG_RTL8822E)
-	pwrctrlpriv->lpspg_kip_info.name = "LPSPG_KIP_INFO";
-	#endif
 	#endif
 #endif
 
@@ -2485,12 +2475,11 @@ void rtw_init_pwrctrl_priv(PADAPTER padapter)
 		rtw_hal_set_output_gpio(padapter, pwrctrlpriv->wowlan_gpio_index,
 			GPIO_OUTPUT_LOW);
 	#else
-	rtw_hal_set_output_gpio(padapter, pwrctrlpriv->wowlan_gpio_index
-		, pwrctrlpriv->wowlan_gpio_output_state);
 	rtw_hal_switch_gpio_wl_ctrl(padapter, pwrctrlpriv->wowlan_gpio_index, _TRUE);
+	val8 = (pwrctrlpriv->is_high_active == 0) ? 1 : 0;
+	rtw_hal_set_output_gpio(padapter, pwrctrlpriv->wowlan_gpio_index, val8);
 	RTW_INFO("%s: set GPIO_%d to OUTPUT %s state in initial and %s_ACTIVE.\n",
-		 __func__, pwrctrlpriv->wowlan_gpio_index, 
-		 pwrctrlpriv->wowlan_gpio_output_state ? "HIGH" : "LOW",
+		 __func__, pwrctrlpriv->wowlan_gpio_index, val8 ? "HIGH" : "LOW",
 		 pwrctrlpriv->is_high_active ? "HIGI" : "LOW");
 	#endif /*CONFIG_WAKEUP_GPIO_INPUT_MODE*/
 #endif /* CONFIG_RTW_ONE_PIN_GPIO */
@@ -2545,6 +2534,11 @@ void rtw_init_pwrctrl_priv(PADAPTER padapter)
 	rtw_wow_war_mdns_parms_reset(padapter, _TRUE);
 #endif /* defined(CONFIG_OFFLOAD_MDNS_V4) || defined(CONFIG_OFFLOAD_MDNS_V6) */
 #endif /* CONFIG_WAR_OFFLOAD */
+
+#ifdef CONFIG_MDNS_OFFLOAD
+	_rtw_memset(&pwrctrlpriv->mdns_ofld_info, 0,
+		    sizeof(struct rtw_mdns_ofld_info));
+#endif
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_LPS_POFF
@@ -2595,9 +2589,6 @@ void rtw_free_pwrctrl_priv(PADAPTER adapter)
 	#if (defined(CONFIG_RTL8822C) || defined(CONFIG_RTL8822E))
 	rsvd_page_cache_free(&pwrctrlpriv->lpspg_dpk_info);
 	rsvd_page_cache_free(&pwrctrlpriv->lpspg_iqk_info);
-	#if defined(CONFIG_RTL8822E)
-	rsvd_page_cache_free(&pwrctrlpriv->lpspg_kip_info);
-	#endif
 	#endif
 #endif
 
@@ -3012,7 +3003,7 @@ int rtw_pm_set_wow_ips(_adapter *padapter, u8 mode)
 	int	ret = 0;
 	char str[80] = {0};
 
-	if (mode < IPS_NUM) {
+	if (mode >= IPS_NONE && mode < IPS_NUM) {
 		if (pwrctrlpriv->wowlan_ips_mode != mode) {
 			pwrctrlpriv->wowlan_ips_mode = mode;
 
@@ -3028,6 +3019,8 @@ int rtw_pm_set_wow_ips(_adapter *padapter, u8 mode)
 				strcpy(str, "IPS_FWIPS_LCLK");
 #endif /* CONFIG_LPS_LCLK */
 #endif /* CONFIG_FWLPS_IN_IPS */
+			else
+				strcpy(str, "Invalid");
 		}
 	} else {
 		sprintf(str, "Invalid value(%d)", mode);
@@ -3088,7 +3081,7 @@ int rtw_pm_set_ips(_adapter *padapter, u8 mode)
 	u8 flags = 0;
 	char str[80] = {0};
 
-	if (mode < IPS_NUM) {
+	if (mode >= IPS_NONE && mode < IPS_NUM) {
 		if (rtw_is_surprise_removed(padapter)) {
 			RTW_ERR("%s: Surprise Removed occured !\n", __func__);
 			return -EFAULT;
@@ -3127,6 +3120,8 @@ int rtw_pm_set_ips(_adapter *padapter, u8 mode)
 				strcpy(str, "IPS_FWIPS_LCLK");
 #endif /* CONFIG_LPS_LCLK */
 #endif /* CONFIG_FWLPS_IN_IPS */
+			else
+				strcpy(str, "Invalid");
 		} else {
 			strcpy(str, "the input is the same with current ips_mode !");
 		}

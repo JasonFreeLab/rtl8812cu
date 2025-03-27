@@ -362,6 +362,7 @@ struct odm_phy_dbg_info {
 #endif
 	u32			condi_num; /*@condition number U(18,4)*/
 	u8			condi_num_cdf[CN_CNT_MAX];
+	u8			band_idx;
 	u8			num_qry_beacon_pkt;
 	u8			beacon_cnt_in_period; /*@beacon cnt within watchdog period*/
 	u8			beacon_phy_rate;
@@ -451,6 +452,7 @@ enum odm_cmninfo {
 	ODM_CMNINFO_EN_AUTO_BW_TH,
 	ODM_CMNINFO_PEAK_DETECT_MODE,
 	ODM_CMNINFO_EN_NBI_DETECT,
+	ODM_CMNINFO_HW_SPECIAL_TYPE,
 	/*@-----------HOOK BEFORE REG INIT-----------*/
 
 	/*@Dynamic value:*/
@@ -913,6 +915,13 @@ struct dm_struct {
 	#endif
 	#if (RTL8822E_SUPPORT)
 	boolean			bt_is_linked;
+	boolean			btc_rssi_processing;
+	boolean			btc_mcs_rssi_en;
+	u8			bt_iso_tbl_idx;
+	u8			bt_cck_rssi_th;
+	#endif
+	#if (RTL8822C_SUPPORT)
+	u8			hw_special_type;
 	#endif
 	boolean			is_nbi_csi;
 	char			dbg_buf[PHYDM_SNPRINT_SIZE];
@@ -1102,6 +1111,7 @@ struct dm_struct {
 	s8			TH_L2H_default;
 	s8			th_edcca_hl_diff_default;
 	s8			th_l2h_ini;
+	s8			th_l2h_ini_custom;
 	s8			th_edcca_hl_diff;
 	boolean			carrier_sense_enable;
 	/*@-----------------------------------------------------------*/

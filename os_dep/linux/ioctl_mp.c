@@ -157,9 +157,6 @@ int rtw_mp_read_reg(struct net_device *dev,
 	if (rtw_do_mp_iwdata_len_chk(__func__, (wrqu->length + 1)))
 		return -EFAULT;
 
-	if (wrqu->length > 128)
-		return -EFAULT;
-
 	input = (char *)rtw_zmalloc(RTW_IWD_MAX_LEN);
 	if (!input)
 		return -ENOMEM;
@@ -348,9 +345,6 @@ int rtw_mp_read_rf(struct net_device *dev,
 	char *pextra = extra;
 
 	if (rtw_do_mp_iwdata_len_chk(__func__, wrqu->length))
-		return -EFAULT;
-
-	if (wrqu->length > 128)
 		return -EFAULT;
 
 	input = (char *)rtw_zmalloc(RTW_IWD_MAX_LEN);
@@ -656,9 +650,6 @@ int rtw_mp_txpower_index(struct net_device *dev,
 	if (rtw_do_mp_iwdata_len_chk(__func__, (wrqu->length + 1)))
 		return -EFAULT;
 
-	if (wrqu->length > 128)
-		return -EFAULT;
-
 	_rtw_memset(input, 0, sizeof(input));
 
 	if (copy_from_user(input, wrqu->pointer, wrqu->length))
@@ -725,7 +716,7 @@ int rtw_mp_txpower(struct net_device *dev,
 	u32 idx_a = 0, idx_b = 0, idx_c = 0, idx_d = 0;
 	int MsetPower = 1;
 	u8 *input = NULL;
-	char pout_str_buf[7];
+	char pout_str_buf[8];
 	u8 res = 0;
 	char *pextra;
 
@@ -893,7 +884,7 @@ int rtw_mp_txpower(struct net_device *dev,
 					db_temp = (s16)hal_mpt_tssi_turn_target_power(padapter, pout, rfpath);
 					pout = pset - db_temp;
 					RTW_INFO("%s: path[%d] db_temp=%d pout = %d\n", __func__, rfpath, db_temp, pout);
-					/* poutdbm = hal_mpt_tssi_turn_target_power(padapter, pout, rfpath); */
+					poutdbm = hal_mpt_tssi_turn_target_power(padapter, pout, rfpath);
 				}
 				poutdbm = db_temp + pout;
 
@@ -2042,7 +2033,7 @@ int rtw_mp_get_tsside(struct net_device *dev,
 
 	u8 legal_param_num = 1;
 	int param_num;
-	char pout_str_buf[7];
+	char pout_str_buf[8];
 	u8 signed_flag = 0;
 	int integer_num;
 	u32 decimal_num;
@@ -2059,7 +2050,8 @@ int rtw_mp_get_tsside(struct net_device *dev,
 	*/
 	legal_param_num = 2;
 	#endif
-	if (wrqu->length > 128)
+
+	if (rtw_do_mp_iwdata_len_chk(__func__, wrqu->length))
 		return -EFAULT;
 
 	_rtw_memset(input, 0, sizeof(input));
@@ -2073,7 +2065,7 @@ int rtw_mp_get_tsside(struct net_device *dev,
 	if(param_num != legal_param_num)
 		goto invalid_param_format;
 
-	if(3 < rfpath)
+	if(rfpath <0 || 3 < rfpath)
 		goto invalid_param_format;
 
 #ifdef CONFIG_RTL8723F
@@ -2164,22 +2156,30 @@ int rtw_mp_set_tsside(struct net_device *dev,
 		halrf_tssi_set_de_for_tx_verify(pDM_Odm, tsside_a, RF_PATH_A);
 		mpt_trigger_tssi_tracking(padapter, RF_PATH_A);
 
-	} else if (sscanf(input, "pathb=%d", &tsside_b) == 1) {
+	}
+	else if (sscanf(input, "pathb=%d", &tsside_b) == 1) {
 		snprintf(extra, RTW_EXTRA_MAX_LEN, "Set TSSI DE path_B: %d", tsside_b);
 		halrf_tssi_set_de_for_tx_verify(pDM_Odm, tsside_b, RF_PATH_B);
 		mpt_trigger_tssi_tracking(padapter, RF_PATH_B);
-#if defined(CONFIG_RTL8814A) || defined(CONFIG_RTL8814B)
-	} else if (sscanf(input, "pathc=%d", &tsside_c) == 1) {
+
+	}
+#if defined(PHYDM_COMPILE_ABOVE_3SS)
+	else if (sscanf(input, "pathc=%d", &tsside_c) == 1) {
 		snprintf(extra, RTW_EXTRA_MAX_LEN, "Set TSSI DE path_C: %d", tsside_c);
 		halrf_tssi_set_de_for_tx_verify(pDM_Odm, tsside_c, RF_PATH_C);
 		mpt_trigger_tssi_tracking(padapter, RF_PATH_C);
 
-	} else if (sscanf(input, "pathd=%d", &tsside_d) == 1) {
+	}
+#endif
+#if defined(PHYDM_COMPILE_ABOVE_3SS)
+	else if (sscanf(input, "pathd=%d", &tsside_d) == 1) {
 		snprintf(extra, RTW_EXTRA_MAX_LEN, "Set TSSI DE path_D: %d", tsside_d);
 		halrf_tssi_set_de_for_tx_verify(pDM_Odm, tsside_d, RF_PATH_D);
 		mpt_trigger_tssi_tracking(padapter, RF_PATH_D);
+
+	}
 #endif
-	} else
+	else
 		snprintf(extra, RTW_EXTRA_MAX_LEN, "Invalid command format, please input TSSI DE value within patha/b/c/d=xyz");
 
 	wrqu->length = strlen(extra);
@@ -2899,9 +2899,10 @@ int rtw_mp_pwrlmt(struct net_device *dev,
 		pch += snprintf(pch, RTW_EXTRA_MAX_LEN, "Turn on Power Limit\n");
 
 	} else
-#endif
 		pch += sprintf(pch, "Get Power Limit Status:%s\n", (registry_par->RegEnableTxPowerLimit == 1) ? "ON" : "OFF");
-
+#else
+		pch += sprintf(pch, "Get Power Limit Status:%s\n", "OFF");
+#endif
 
 	wrqu->data.length = strlen(extra);
 	return 0;
@@ -3312,7 +3313,10 @@ int rtw_mp_link(struct net_device *dev,
 		if (pmp_priv->mplink_brx == _TRUE) {
 			pch = extra;
 				while (waittime < 100 && pmp_priv->mplink_brx == _FALSE) {
-						rtw_msleep_os(10);
+						if (pmp_priv->mplink_brx == _FALSE)
+							rtw_msleep_os(10);
+						else
+							break;
 						waittime++;
 				}
 				if (pmp_priv->mplink_brx == _TRUE) {
@@ -3832,7 +3836,7 @@ int rtw_mp_gpio(struct net_device *dev,
 		wrqu->length = strlen(extra);
 		return -EINVAL;
 	}
-	else if (gpio_id > 15) {
+	else if (gpio_id < 0 || gpio_id > 15) {
 		sprintf(extra, "Invalid gpio_id, please input gpio_id : 0 ~ 15\n");
 		wrqu->length = strlen(extra);
 		return -EINVAL;

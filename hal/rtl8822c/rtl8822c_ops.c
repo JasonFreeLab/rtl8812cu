@@ -351,7 +351,7 @@ static void Hal_EfuseParseBTCoexistInfo(PADAPTER adapter, u8 *map, u8 mapvalid)
 
 static void Hal_EfuseParseChnlPlan(PADAPTER adapter, u8 *map, u8 autoloadfail)
 {
-	hal_com_config_channel_plan(
+	hal_com_parse_channel_plan(
 		adapter,
 		map ? &map[EEPROM_COUNTRY_CODE_8822C] : NULL,
 		map ? map[EEPROM_ChannelPlan_8822C] : 0xFF,
@@ -507,8 +507,6 @@ static void Hal_EfuseParseThermalMeter(PADAPTER adapter, u8 *map, u8 mapvalid)
 		u8 eeprom_thermal_meter_a = map[EEPROM_THERMAL_METER_A_8822C];
 		u8 eeprom_thermal_meter_b = map[EEPROM_THERMAL_METER_B_8822C];		
 		hal->eeprom_thermal_meter = (eeprom_thermal_meter_a + eeprom_thermal_meter_b)/2;
-		hal->eeprom_thermal_meter_multi[0] = eeprom_thermal_meter_a; 
-		hal->eeprom_thermal_meter_multi[1] = eeprom_thermal_meter_b; 
 	} else {
 		hal->eeprom_thermal_meter = EEPROM_Default_ThermalMeter;
 		hal->odmpriv.rf_calibrate_info.is_apk_thermal_meter_ignore = _TRUE;
@@ -1081,71 +1079,38 @@ static void xmit_status_check(PADAPTER p)
 }
 
 #ifdef CONFIG_USB_HCI
-#ifdef RTW_DETECT_HANG
-#define MAX_RESET_CNT 4
-#define DETECT_CNT 5
 static void check_rx_count(PADAPTER p)
 {
-	struct dvobj_priv *dvobj = adapter_to_dvobj(p);
-	struct hang_info *phang_info = &(dvobj->drv_dbg.dbg_hang_info);
-	struct mac_hang_info *pmac_hang_info = &phang_info->dbg_mac_hang_info;
-	struct recv_priv  *precvpriv = &p->recvpriv;
-	u32 rxff_cnt_orig_r = 0, rxff_cnt_orig_w = 0, rxff_cnt_r = 0, rxff_cnt_w = 0;
-	u8 i = 0;
-	u8 check_rxff_hang = _FALSE;
+	PHAL_DATA_TYPE hal = GET_HAL_DATA(p);
+	struct sreset_priv *psrtpriv = &hal->srestpriv;
+	u16 cur_mac_rxff_ptr;
 
-	rxff_cnt_orig_r = rtw_read32(p, REG_RXFF_PTR_V1_8822C) & 0x3ffff;
-	rxff_cnt_orig_w = rtw_read32(p, REG_RXFF_WTR_V1_8822C) & 0x3ffff;
-	rtw_msleep_os(10);
+	cur_mac_rxff_ptr = rtw_read16(p, REG_RXFF_PTR_V1_8822C);
 
-	for (i = 0; i < DETECT_CNT; i++) {
-		rxff_cnt_r = rtw_read32(p, REG_RXFF_PTR_V1_8822C) & 0x3ffff;
-		rxff_cnt_w = rtw_read32(p, REG_RXFF_WTR_V1_8822C) & 0x3ffff;
-		rtw_msleep_os(10);
+#if 0
+	RTW_INFO("%s,psrtpriv->last_mac_rxff_ptr = %d , cur_mac_rxff_ptr = %d\n", __func__, psrtpriv->last_mac_rxff_ptr, cur_mac_rxff_ptr);
+#endif
 
-		if (rxff_cnt_orig_r != rxff_cnt_r || rxff_cnt_orig_w != rxff_cnt_w) {
-			check_rxff_hang = _FALSE;
-		} else {
-			if (rxff_cnt_r != rxff_cnt_w) /* read pointer can't move, means hang */
-				check_rxff_hang = _TRUE;
-			else
-				check_rxff_hang = _FALSE;
-		}
-
-		if (check_rxff_hang == _FALSE)
-			break;
+	if (psrtpriv->last_mac_rxff_ptr == cur_mac_rxff_ptr) {
+		psrtpriv->rx_cnt++;
+#if 0
+		RTW_INFO("%s,MAC case rx_cnt=%d\n", __func__, psrtpriv->rx_cnt);
+#endif
+		goto exit;
 	}
 
-	if (check_rxff_hang) {
-		if (rxff_cnt_orig_r == pmac_hang_info->last_rxff_cnt_r &&
-		    rxff_cnt_orig_w == pmac_hang_info->last_rxff_cnt_w)
-			pmac_hang_info->rxff_hang_cnt++;
-	} else {
-		pmac_hang_info->rxff_hang_cnt = 0;
-	}
+	psrtpriv->rx_cnt = 0;
 
-	pmac_hang_info->last_rxff_cnt_r = rxff_cnt_orig_r;
-	pmac_hang_info->last_rxff_cnt_w = rxff_cnt_orig_w;
+exit:
 
-	/*
-	 * Trigger silent reset if RX_FIFO hangs 2 times continuously.
-	 * Don't trigger sreset anymore if it triggers 3 times continuously.
-	 */
-	if (pmac_hang_info->rxff_hang_cnt > 1 &&
-		pmac_hang_info->rxff_hang_cnt < MAX_RESET_CNT)
-		pmac_hang_info->is_rxff_hang = _TRUE;
-	else
-		pmac_hang_info->is_rxff_hang = _FALSE;
+	psrtpriv->last_mac_rxff_ptr = cur_mac_rxff_ptr;
 
-	if (pmac_hang_info->is_rxff_hang) {
-		RTW_ERR("RXFF maybe hang, trigger silent reset to recover(%d)\n", ATOMIC_READ(&(precvpriv->rx_pending_cnt)));
-		mac_reg_dump(RTW_DBGDUMP, p);
-		bb_reg_dump(RTW_DBGDUMP, p);
-		rf_reg_dump(RTW_DBGDUMP, p);
+	if (psrtpriv->rx_cnt > 3) {
+		psrtpriv->self_dect_case = 2;
+		psrtpriv->self_dect_rx_cnt++;
 		rtw_hal_sreset_reset(p);
 	}
 }
-#endif /* RTW_DETECT_HANG */
 #endif/*#ifdef CONFIG_USB_HCI*/
 
 static void linked_status_check(PADAPTER p)
@@ -1173,9 +1138,7 @@ static void linked_status_check(PADAPTER p)
 	}
 
 #ifdef CONFIG_USB_HCI
-#ifdef RTW_DETECT_HANG
 	check_rx_count(p);
-#endif
 #endif /* CONFIG_USB_HCI */
 
 	if (psrtpriv->dbg_trigger_point == SRESET_TGP_LINK_STATUS) {
@@ -1661,11 +1624,6 @@ static void hw_var_set_mlme_disconnect(PADAPTER adapter)
 
 		/* disable update TSF1(CLINT0) */
 		rtw_iface_disable_tsf_update(adapter);
-
-		/* disable Port1's beacon function */
-		val8 = rtw_read8(adapter, REG_BCN_CTRL_CLINT0_8822C);
-		val8 &= ~BIT_CLI0_EN_BCN_FUNCTION_8822C;
-		rtw_write8(adapter, REG_BCN_CTRL_CLINT0_8822C, val8);
 	} else
 #endif
 	{
@@ -1715,7 +1673,7 @@ static void hw_var_set_mlme_sitesurvey(PADAPTER adapter, u8 enable)
 		rtw_hal_rcr_set_chk_bssid(adapter, MLME_SCAN_ENTER);
 
 		if (rtw_mi_get_ap_num(adapter) || rtw_mi_get_mesh_num(adapter))
-			StopTxBeacon(adapter);
+			StopTxBeacon_with_reason(adapter, CTRL_TX_BCN_BY_SCAN);
 	} else {
 		/* sitesurvey done
 		 * 1. enable rx data frame
@@ -1730,7 +1688,7 @@ static void hw_var_set_mlme_sitesurvey(PADAPTER adapter, u8 enable)
 
 		#ifdef CONFIG_AP_MODE
 		if (rtw_mi_get_ap_num(adapter) || rtw_mi_get_mesh_num(adapter)) {
-			ResumeTxBeacon(adapter);
+			ResumeTxBeacon_with_reason(adapter, CTRL_TX_BCN_BY_SCAN);
 			rtw_mi_tx_beacon_hdl(adapter);
 		}
 		#endif
@@ -1755,7 +1713,7 @@ static void hw_var_set_mlme_join(PADAPTER adapter, u8 type)
 	if (type == 0) {
 		/* prepare to join */
 		if (rtw_mi_get_ap_num(adapter) || rtw_mi_get_mesh_num(adapter))
-			StopTxBeacon(adapter);
+			StopTxBeacon_with_reason(adapter, CTRL_TX_BCN_BY_JOIN);
 
 		/* enable to rx data frame.Accept all data frame */
 		rtw_write16(adapter, REG_RXFLTMAP2_8822C, 0xFFFF);
@@ -1786,7 +1744,7 @@ static void hw_var_set_mlme_join(PADAPTER adapter, u8 type)
 		rtw_iface_disable_tsf_update(adapter);
 
 		if (rtw_mi_get_ap_num(adapter) || rtw_mi_get_mesh_num(adapter)) {
-			ResumeTxBeacon(adapter);
+			ResumeTxBeacon_with_reason(adapter, CTRL_TX_BCN_BY_JOIN);
 
 			/* reset TSF 1/2 after resume_tx_beacon */
 			val8 = BIT_TSFTR_RST_8822C | BIT_TSFTR_CLI0_RST_8822C;
@@ -1805,7 +1763,7 @@ static void hw_var_set_mlme_join(PADAPTER adapter, u8 type)
 		}
 
 		if (rtw_mi_get_ap_num(adapter) || rtw_mi_get_mesh_num(adapter)) {
-			ResumeTxBeacon(adapter);
+			ResumeTxBeacon_with_reason(adapter, CTRL_TX_BCN_BY_JOIN);
 
 			/* reset TSF 1/2 after resume_tx_beacon */
 			rtw_write8(adapter, REG_DUAL_TSF_RST_8822C, BIT_TSFTR_RST_8822C | BIT_TSFTR_CLI0_RST_8822C);
@@ -2713,20 +2671,6 @@ u8 rtl8822c_sethwreg(PADAPTER adapter, u8 variable, u8 *val)
 	}
 		break;
 #endif
-#if defined(CONFIG_CHANGE_DTIM_PERIOD) && defined(CONFIG_AP_MODE)
-	case HW_VAR_DTIM:
-		/* DTIM COUNTER: dtim_period - 1 ~ 0*/
-		if (*val == _TRUE) {
-			rtw_write8(adapter, REG_DTIM_COUNTER_ROOT_8822C, (adapter->registrypriv.dtim_period - 1));
-			rtw_write32(adapter, REG_TCR_8822C,
-				rtw_read32(adapter, REG_TCR_8822C) | BIT_WMAC_TCR_UPD_TIMIE_8822C);
-		} else {
-			rtw_write32(adapter, REG_TCR_8822C,
-				rtw_read32(adapter, REG_TCR_8822C) & (~BIT_WMAC_TCR_UPD_TIMIE_8822C));
-			rtw_write8(adapter, REG_DTIM_COUNTER_ROOT_8822C, 0);
-		}
-		break;
-#endif
 	default:
 		ret = SetHwReg(adapter, variable, val);
 		break;
@@ -3303,7 +3247,7 @@ u8 rtl8822c_gethaldefvar(PADAPTER adapter, HAL_DEF_VARIABLE variable, void *pval
 
 void rtl8822c_fill_txdesc_sectype(struct pkt_attrib *pattrib, u8 *ptxdesc)
 {
-	if (!pattrib->bswenc) {
+	if ((pattrib->encrypt > 0) && !pattrib->bswenc) {
 		/* SEC_TYPE : 0:NO_ENC,1:WEP40/TKIP,2:WAPI,3:AES */
 		switch (pattrib->encrypt) {
 		case _WEP40_:
@@ -3513,8 +3457,9 @@ void rtl8822c_fill_txdesc_bmc_tx_rate(struct pkt_attrib *pattrib, u8 *ptxdesc)
  */
 void rtl8822c_fill_txdesc_bf(struct xmit_frame *frame, u8 *desc)
 {
-#if defined(CONFIG_BEAMFORMING) || defined(CONFIG_BEAMFORMING_MONITOR) 
-        
+#ifndef CONFIG_BEAMFORMING
+	return;
+#else /* CONFIG_BEAMFORMING */
 	struct pkt_attrib *attrib;
 	struct _ADAPTER *padapter = frame->padapter;
 	struct hal_com_data *pHalData = GET_HAL_DATA(padapter);
@@ -3545,8 +3490,9 @@ void rtl8822c_fill_txdesc_bf(struct xmit_frame *frame, u8 *desc)
  */
 void rtl8822c_fill_txdesc_mgnt_bf(struct xmit_frame *frame, u8 *desc)
 {
-#if defined(CONFIG_BEAMFORMING) || defined(CONFIG_BEAMFORMING_MONITOR)
-
+#ifndef CONFIG_BEAMFORMING
+	return;
+#else /* CONFIG_BEAMFORMING */
 	PADAPTER adapter;
 	struct pkt_attrib *attrib;
 	u8 ndpa = 0;
@@ -3597,8 +3543,6 @@ void rtl8822c_fill_txdesc_mgnt_bf(struct xmit_frame *frame, u8 *desc)
 	 */
 	/*SET_TX_DESC_P_AID_8822C(desc, pattrib->txbf_p_aid);*/
 	SET_TX_DESC_SND_PKT_SEL_8822C(desc, attrib->bf_pkt_type);
-#else
-        return;
 #endif /* CONFIG_BEAMFORMING */
 }
 

@@ -522,7 +522,7 @@ u8 *rtw_tdls_set_ht_cap(_adapter *padapter, u8 *pframe, struct pkt_attrib *pattr
 		padapter->mlmepriv.htpriv.sgi_40m = _FALSE;
 	}
 
-	rtw_restructure_ht_ie(padapter, NULL, pframe, 0, &(pattrib->pktlen), padapter->mlmeextpriv.cur_channel, NULL);
+	rtw_restructure_ht_ie(padapter, NULL, pframe, 0, &(pattrib->pktlen), padapter->mlmeextpriv.cur_channel);
 
 	return pframe + pattrib->pktlen;
 }
@@ -1824,11 +1824,11 @@ sint On_TDLS_Setup_Req(_adapter *padapter, union recv_frame *precv_frame, struct
 	struct security_priv *psecuritypriv = &padapter->securitypriv;
 	_irqL irqL;
 	struct rx_pkt_attrib	*prx_pkt_attrib = &precv_frame->u.hdr.attrib;
-	u8 *prsnie, *ppairwise_cipher;
+	u8 *pftie = NULL, *prsnie, *ppairwise_cipher;
 	u8 i, k;
 	u8 ccmp_included = 0, rsnie_included = 0;
 	u16 j, pairwise_count;
-	u8 SNonce[32] = { 0 };
+	u8 SNonce[32];
 	u32 timeout_interval = TDLS_TPK_RESEND_COUNT;
 	sint parsing_length;	/* Frame body length, without icv_len */
 	PNDIS_802_11_VARIABLE_IEs	pIE;
@@ -1942,6 +1942,7 @@ sint On_TDLS_Setup_Req(_adapter *padapter, union recv_frame *precv_frame, struct
 			case _VENDOR_SPECIFIC_IE_:
 				break;
 			case _FTIE_:
+				pftie = (u8 *)pIE;
 				if (prx_pkt_attrib->encrypt)
 					_rtw_memcpy(SNonce, (ptr + j + 52), 32);
 				break;
@@ -1995,7 +1996,10 @@ sint On_TDLS_Setup_Req(_adapter *padapter, union recv_frame *precv_frame, struct
 
 		ptdls_sta->tdls_sta_state |= TDLS_INITIATOR_STATE;
 		if (prx_pkt_attrib->encrypt) {
-			_rtw_memcpy(ptdls_sta->SNonce, SNonce, 32);
+			if (pftie == NULL)
+				RTW_WARN("%s: SNonce is null\n", __func__);
+			else
+				_rtw_memcpy(ptdls_sta->SNonce, SNonce, 32);
 
 			if (timeout_interval <= 300)
 				ptdls_sta->TDLS_PeerKey_Lifetime = TDLS_TPK_RESEND_COUNT;
@@ -2015,7 +2019,8 @@ sint On_TDLS_Setup_Req(_adapter *padapter, union recv_frame *precv_frame, struct
 		rtw_tdls_process_wfd_ie(ptdlsinfo, ptr + FIXED_IE, parsing_length);
 #endif
 
-	}
+	} else
+		goto exit;
 
 	_rtw_memcpy(txmgmt.peer, prx_pkt_attrib->src, ETH_ALEN);
 
@@ -2048,7 +2053,7 @@ int On_TDLS_Setup_Rsp(_adapter *padapter, union recv_frame *precv_frame, struct 
 	sint parsing_length;	/* Frame body length, without icv_len */
 	PNDIS_802_11_VARIABLE_IEs	pIE;
 	u8 FIXED_IE = 7;
-	u8 ANonce[32] = { 0 };
+	u8 ANonce[32];
 	u8  *pftie = NULL, *ptimeout_ie = NULL, *plinkid_ie = NULL, *prsnie = NULL, *pftie_mic = NULL, *ppairwise_cipher = NULL;
 	u16 pairwise_count, j, k;
 	u8 verify_ccmp = 0;
@@ -2163,7 +2168,11 @@ int On_TDLS_Setup_Rsp(_adapter *padapter, union recv_frame *precv_frame, struct 
 
 	ptdls_sta->bssratelen = supportRateNum;
 	_rtw_memcpy(ptdls_sta->bssrateset, supportRate, supportRateNum);
-	_rtw_memcpy(ptdls_sta->ANonce, ANonce, 32);
+
+	if (pftie == NULL)
+		RTW_WARN("%s: ANonce is null\n", __func__);
+	else
+		_rtw_memcpy(ptdls_sta->ANonce, ANonce, 32);
 
 #ifdef CONFIG_WFD
 	rtw_tdls_process_wfd_ie(ptdlsinfo, ptr + FIXED_IE, parsing_length);
@@ -2469,10 +2478,8 @@ int On_TDLS_Peer_Traffic_Rsp(_adapter *padapter, union recv_frame *precv_frame, 
 			_irqL irqL;
 			_list	*xmitframe_plist, *xmitframe_phead;
 			struct xmit_frame *pxmitframe = NULL;
-			struct xmit_priv *pxmitpriv = &padapter->xmitpriv;
 
-			/* _enter_critical_bh(&ptdls_sta->sleep_q.lock, &irqL);*/
-			_enter_critical_bh(&pxmitpriv->lock, &irqL);
+			_enter_critical_bh(&ptdls_sta->sleep_q.lock, &irqL);
 
 			xmitframe_phead = get_list_head(&ptdls_sta->sleep_q);
 			xmitframe_plist = get_next(xmitframe_phead);
@@ -2504,8 +2511,7 @@ int On_TDLS_Peer_Traffic_Rsp(_adapter *padapter, union recv_frame *precv_frame, 
 				ptdls_sta->sleepq_len = 0;
 			}
 
-			_exit_critical_bh(&pxmitpriv->lock, &irqL);
-			/* _exit_critical_bh(&ptdls_sta->sleep_q.lock, &irqL); */
+			_exit_critical_bh(&ptdls_sta->sleep_q.lock, &irqL);
 
 		}
 
@@ -3332,11 +3338,10 @@ void _tdls_delay_timer_hdl(void *FunctionContext)
 void _tdls_stay_on_base_chnl_timer_hdl(void *FunctionContext)
 {
 	struct sta_info *ptdls_sta = (struct sta_info *)FunctionContext;
-	
-	if (ptdls_sta != NULL) {
-		_adapter *padapter = ptdls_sta->padapter;
-		struct tdls_ch_switch *pchsw_info = &padapter->tdlsinfo.chsw_info;
+	_adapter *padapter = ptdls_sta->padapter;
+	struct tdls_ch_switch *pchsw_info = &padapter->tdlsinfo.chsw_info;
 
+	if (ptdls_sta != NULL) {
 		issue_tdls_ch_switch_req(padapter, ptdls_sta);
 		pchsw_info->ch_sw_state |= TDLS_WAIT_CH_RSP_STATE;
 	}

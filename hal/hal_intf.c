@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2022 Realtek Corporation.
+ * Copyright(c) 2007 - 2017 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -59,60 +59,16 @@ u8 rtw_hal_read_chip_info(_adapter *padapter)
 	u8 rtn = _SUCCESS;
 	u8 hci_type = rtw_get_intf_type(padapter);
 	systime start = rtw_get_current_time();
-	bool pwr_on = false;
-#ifdef CONFIG_FW_DUMP_EFUSE
-	bool restore_drv_stopped = false;
-	s32 ret_fwdl;
-#endif
-
 
 	/*  before access eFuse, make sure card enable has been called */
-	if (1 &&
-#ifndef CONFIG_FW_DUMP_EFUSE
-	    (hci_type == RTW_SDIO || hci_type == RTW_GSPI) &&
-#endif
-	    !rtw_is_hw_init_completed(padapter)) {
+	if ((hci_type == RTW_SDIO || hci_type == RTW_GSPI)
+	    && !rtw_is_hw_init_completed(padapter))
 		rtw_hal_power_on(padapter);
-		pwr_on = true;
-	}
-
-#ifdef CONFIG_FW_DUMP_EFUSE
-	if (rtw_is_surprise_removed(padapter)) {
-		RTW_WARN("%s: under surprise_removed!\n", __func__);
-		/*rtw_clr_surprise_removed(padapter);*/
-	}
-	if (rtw_is_drv_stopped(padapter)) {
-		restore_drv_stopped = true;
-		rtw_clr_drv_stopped(padapter);
-		RTW_DBG("%s: temporally clear drv_stopped\n", __func__);
-	}
-	if (RTW_IS_FUNC_DISABLED(padapter, DF_RX_BIT)) {
-		RTW_WARN("%s: DF_RX_BIT is disabled\n", __func__);
-		/*RTW_ENABLE_FUNC(padapter, DF_RX_BIT);*/
-	}
-
-	ret_fwdl = rtw_hal_fw_dl(padapter, _FALSE);
-	if (ret_fwdl != _SUCCESS) {
-		rtn = _FAIL;
-		goto exit_restore;
-	}
-
-	/* enable TX/RX */
-	rtw_intf_start(padapter);
-#endif /* CONFIG_FW_DUMP_EFUSE */
 
 	rtn = padapter->hal_func.read_adapter_info(padapter);
 
-#ifdef CONFIG_FW_DUMP_EFUSE
-	rtw_intf_stop(padapter);
-
-exit_restore:
-	if (restore_drv_stopped) {
-		rtw_set_drv_stopped(padapter);
-		RTW_DBG("%s: restore drv_stopped\n", __func__);
-	}
-#endif
-	if (pwr_on)
+	if ((hci_type == RTW_SDIO || hci_type == RTW_GSPI)
+	    && !rtw_is_hw_init_completed(padapter))
 		rtw_hal_power_off(padapter);
 
 	RTW_INFO("%s in %d ms\n", __func__, rtw_get_passing_time_ms(start));
@@ -195,8 +151,8 @@ u8 rtw_hal_data_init(_adapter *padapter)
 			return _FAIL;
 		}
 		GET_HAL_DATA(padapter)->adapter = padapter;
-#ifdef CONFIG_FW_DUMP_EFUSE
-		_rtw_spinlock_init(&((HAL_DATA_TYPE*)padapter->HalData)->fw_efuse_lock);
+#ifdef CONFIG_TX_PAUSE_FW_CTRL
+		_rtw_spinlock_init(&((HAL_DATA_TYPE*)padapter->HalData)->tx_pause_sctx_lock);
 #endif
 		#if CONFIG_TXPWR_LIMIT
 		hal_txpwr_lmt_tb_init(padapter->HalData);
@@ -216,8 +172,8 @@ void rtw_hal_data_deinit(_adapter *padapter)
 #ifdef CONFIG_LOAD_PHY_PARA_FROM_FILE
 			phy_free_filebuf(padapter);
 #endif
-#ifdef CONFIG_FW_DUMP_EFUSE
-			_rtw_spinlock_free(&((HAL_DATA_TYPE*)padapter->HalData)->fw_efuse_lock);
+#ifdef CONFIG_TX_PAUSE_FW_CTRL
+			_rtw_spinlock_free(&((HAL_DATA_TYPE*)padapter->HalData)->tx_pause_sctx_lock);
 #endif
 			rtw_vmfree(padapter->HalData, padapter->hal_data_sz);
 			padapter->HalData = NULL;
@@ -418,6 +374,14 @@ if (IS_HARDWARE_TYPE_8814A(adapter)) {
 	hal_data->max_tx_cnt = rtw_min(hal_data->max_tx_cnt, tx_path_num);
 	if (hal_data->eeprom_max_tx_cnt)
 		hal_data->max_tx_cnt = rtw_min(hal_data->max_tx_cnt, hal_data->eeprom_max_tx_cnt);
+
+	if ((IS_HARDWARE_TYPE_8822C(adapter) || IS_HARDWARE_TYPE_8822E(adapter))
+		&& (regsty->rx_path_lmt == 1)) {
+		trx_path_bmp = hal_spec->rf_reg_trx_path_bmp;
+		trx_path_bmp = rtw_restrict_trx_path_bmp_by_trx_num_lmt(trx_path_bmp
+			, regsty->tx_path_lmt, 2, &tx_path_num, &rx_path_num);
+		hal_data->trx_path_bmp = trx_path_bmp;
+	}
 
 	if (1)
 		_dump_rf_path(RTW_DBGDUMP, adapter);
@@ -656,6 +620,13 @@ uint	 rtw_hal_init(_adapter *padapter)
 	PHAL_DATA_TYPE pHalData = GET_HAL_DATA(padapter);
 	int i;
 
+#ifdef CONFIG_HAL_PREINIT
+	if (rtw_get_hal_pre_inited(padapter) == _TRUE) {
+		rtw_set_hal_pre_inited(padapter, _FALSE);
+		return status;
+	}
+#endif
+
 	halrf_set_rfsupportability(adapter_to_phydm(padapter));
 
 	status = padapter->hal_func.hal_init(padapter);
@@ -730,6 +701,12 @@ uint rtw_hal_deinit(_adapter *padapter)
 	if (status == _SUCCESS) {
 		rtw_led_control(padapter, LED_CTL_POWER_OFF);
 		rtw_set_hw_init_completed(padapter, _FALSE);
+#ifdef CONFIG_HAL_PREINIT
+		if (rtw_get_hal_pre_inited(padapter) == _TRUE) {
+			RTW_INFO("rtw_hal_deinit with hal_pre_inited\n");
+			rtw_set_hal_pre_inited(padapter, _FALSE);
+		}
+#endif
 	} else
 		RTW_INFO("\n rtw_hal_deinit: hal_init fail\n");
 
@@ -1214,7 +1191,7 @@ void	rtw_hal_dm_watchdog(_adapter *padapter)
 
 	rtw_hal_turbo_edca(padapter);
 #ifndef CONFIG_DIRECT_EDCCA_MODE_SETTING
-	rtw_odm_adaptivity_update(adapter_to_dvobj(padapter));
+	rtw_edcca_hal_update(adapter_to_dvobj(padapter));
 #endif
 	padapter->hal_func.hal_dm_watchdog(padapter);
 }
@@ -1419,6 +1396,12 @@ s32 c2h_handler(_adapter *adapter, u8 id, u8 seq, u8 plen, u8 *payload)
 		rtw_hal_bcn_early_rpt_c2h_handler(adapter);
 		break;
 
+#ifdef CONFIG_TX_PAUSE_FW_CTRL
+	case C2H_TX_PAUSE_RPT:
+		c2h_tx_pause_rpt_hdl(adapter, payload, plen);
+		break;
+#endif
+
 #ifdef CONFIG_MCC_MODE
 	case C2H_MCC:
 		rtw_hal_mcc_c2h_handler(adapter, plen, payload);
@@ -1431,7 +1414,6 @@ s32 c2h_handler(_adapter *adapter, u8 id, u8 seq, u8 plen, u8 *payload)
 		break;
 	case C2H_MAC_HIDDEN_RPT_2:
 		c2h_mac_hidden_rpt_2_hdl(adapter, payload, plen);
-		c2h_mac_hidden_rpt_done(adapter);
 		break;
 #endif
 
@@ -1504,6 +1486,7 @@ s32 rtw_hal_c2h_id_handle_directly(_adapter *adapter, u8 id, u8 seq, u8 plen, u8
 	case C2H_IQK_FINISH:
 	case C2H_MCC:
 	case C2H_BCN_EARLY_RPT:
+	case C2H_TX_PAUSE_RPT:
 	case C2H_AP_REQ_TXRPT:
 	case C2H_SPC_STAT:
 	case C2H_SET_TXPWR_FINISH:
@@ -1732,15 +1715,7 @@ static s32 _rtw_hal_macid_bmp_sleep(_adapter *adapter, struct macid_bmp *bmp, u8
 	u32 m;
 	u8 mid = 0;
 	u32 val32;
-#ifdef CONFIG_TX_DUTY
-	struct dvobj_priv *dvobj = adapter->dvobj;
-	struct tx_duty_t *tx_duty_ctrl = &(dvobj->tx_duty_ctrl);
 
-	if (tx_duty_ctrl->enable == _TRUE) {
-		RTW_PRINT(ADPT_FMT" disable tx duty before using macid sleep\n", ADPT_ARG(adapter));
-		rtw_warn_on(1);
-	}
-#endif /* CONFIG_TX_DUTY */
 	do {
 		if (mid == 0) {
 			m = bmp->m0;
@@ -1995,9 +1970,9 @@ void rtw_hal_fill_fake_txdesc(_adapter *padapter, u8 *pDesc, u32 BufferLen,
 
 }
 
-u16 rtw_hal_get_txbuff_rsvd_page_num(_adapter *adapter, bool wowlan)
+u8 rtw_hal_get_txbuff_rsvd_page_num(_adapter *adapter, bool wowlan)
 {
-	u16 num = 0;
+	u8 num = 0;
 
 
 	if (adapter->hal_func.hal_get_tx_buff_rsvd_page_num) {
@@ -2119,6 +2094,12 @@ int rtw_hal_tx_pause(_adapter *adapter, enum tx_pause_rson rson, bool tx_pause)
 		case PAUSE_RSON_DFS_CSA_MG:
 			*tx_off = (u8)~(StopBecon | StopMgt);
 			break;
+		case PAUSE_RSON_SCAN:
+		case PAUSE_RSON_JOIN:
+		case PAUSE_RSON_CORRECT_TSF:
+		case PAUSE_RSON_OTHER_BCN_CTRL:
+			*tx_off = (u8)StopBecon;
+			break;
 		default:
 			RTW_ERR("Unknow pause reason:%d\n", rson);
 			goto _error;
@@ -2138,10 +2119,17 @@ int rtw_hal_tx_pause(_adapter *adapter, enum tx_pause_rson rson, bool tx_pause)
 	RTW_DBG("TX %sPause - Reason(%d) final tx_cfg(0x%02x)\n",
 		 tx_pause?"":"Un-", rson, tx_cfg);
 
-	rtw_hal_get_hwreg(adapter, HW_VAR_TXPAUSE, &val);
-	ret = _SUCCESS;
-	if (val != tx_cfg)
-		ret = rtw_hal_set_hwreg(adapter, HW_VAR_TXPAUSE, &tx_cfg);
+#ifdef CONFIG_TX_PAUSE_FW_CTRL
+	if (GET_HAL_SPEC(adapter)->txpause_cap & TXPAUSE_CAP_FW_CTRL)
+		ret = rtw_hal_h2c_tx_pause_ctrl(adapter, tx_cfg);
+	else
+#endif
+	{
+		rtw_hal_get_hwreg(adapter, HW_VAR_TXPAUSE, &val);
+		ret = _SUCCESS;
+		if (val != tx_cfg)
+			ret = rtw_hal_set_hwreg(adapter, HW_VAR_TXPAUSE, &tx_cfg);
+	}
 
 _error:
 	return ret;

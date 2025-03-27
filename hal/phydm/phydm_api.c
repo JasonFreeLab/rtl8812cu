@@ -1112,16 +1112,11 @@ u8 phydm_find_fc(void *dm_void, u32 channel, u32 bw, u32 second_ch, u32 *fc_in)
 {
 	struct dm_struct *dm = (struct dm_struct *)dm_void;
 	u32 fc = *fc_in;
-	u32 start_ch_per_40m[NUM_START_CH_40M] = {20, 28, 
-						  36, 44, 52, 60, 
-						  68, 76, 84, 92,
-						  100,
+	u32 start_ch_per_40m[NUM_START_CH_40M] = {36, 44, 52, 60, 100,
 						  108, 116, 124, 132, 140,
-						  149, 157, 165, 173,
-						  181, 189, 197, 205, 213, 221, 229, 237, 245
-						  };
-	u32 start_ch_per_80m[NUM_START_CH_80M] = {20, 36, 52, 68, 84, 100, 116, 132,
-						  149, 165, 181, 197, 213, 229};
+						  149, 157, 165, 173};
+	u32 start_ch_per_80m[NUM_START_CH_80M] = {36, 52, 100, 116, 132,
+						  149, 165};
 	u32 *start_ch = &start_ch_per_40m[0];
 	u32 num_start_channel = NUM_START_CH_40M;
 	u32 channel_offset = 0;
@@ -1153,7 +1148,7 @@ u8 phydm_find_fc(void *dm_void, u32 channel, u32 bw, u32 second_ch, u32 *fc_in)
 		}
 	}
 	/*@5G*/
-	else if (channel >= 16 && channel <= 253) {
+	else if (channel >= 36 && channel <= 177) {
 		if (bw != 20) {
 			if (bw == 40) {
 				num_start_channel = NUM_START_CH_40M;
@@ -1175,7 +1170,7 @@ u8 phydm_find_fc(void *dm_void, u32 channel, u32 bw, u32 second_ch, u32 *fc_in)
 				  channel);
 		}
 
-		fc = 5080 + (channel - 16) * 5;
+		fc = 5180 + (channel - 36) * 5;
 
 	} else {
 		PHYDM_DBG(dm, ODM_COMP_API, "CH = ((%d)) Error setting\n",

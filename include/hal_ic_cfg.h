@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2022 Realtek Corporation.
+ * Copyright(c) 2007 - 2019 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -83,6 +83,10 @@
 	#ifndef CONFIG_TXPWR_PG_WITH_PWR_IDX
 	#define CONFIG_TXPWR_PG_WITH_PWR_IDX
 	#endif
+
+	#ifndef CONFIG_TX_PAUSE_FW_CTRL
+	#define CONFIG_TX_PAUSE_FW_CTRL
+	#endif
 #endif
 
 #ifdef CONFIG_RTL8821A
@@ -142,7 +146,7 @@
 	#ifndef CONFIG_TXPWR_PG_WITH_PWR_IDX
 	#define CONFIG_TXPWR_PG_WITH_PWR_IDX
 	#endif
-	#define CONFIG_STOP_RESUME_BCN_BY_TXPAUSE /*to fixed no bcn issue*/
+	#define CONFIG_STOP_RESUME_BCN_BY_TXPAUSE 0xFF /* all reason */ /*to fixed no bcn issue*/
 	#define CONFIG_TSF_SYNC
 #endif
 
@@ -194,6 +198,10 @@
 	#ifndef CONFIG_TXPWR_PG_WITH_PWR_IDX
 	#define CONFIG_TXPWR_PG_WITH_PWR_IDX
 	#endif
+
+	#ifndef CONFIG_TX_PAUSE_FW_CTRL
+	#define CONFIG_TX_PAUSE_FW_CTRL
+	#endif
 #endif
 
 #ifdef CONFIG_RTL8703B
@@ -229,6 +237,8 @@
 	#ifndef CONFIG_TXPWR_PG_WITH_PWR_IDX
 	#define CONFIG_TXPWR_PG_WITH_PWR_IDX
 	#endif
+
+	#define CONFIG_STOP_RESUME_BCN_BY_TXPAUSE 0x0E /* SCAN | JOIN | CORRECT_TSF */
 #endif
 
 #ifdef CONFIG_RTL8188GTV
@@ -252,6 +262,8 @@
 	#if defined(CONFIG_USB_HCI) && !defined(CONFIG_FW_OFFLOAD_SET_TXPWR_IDX)
 	#define CONFIG_FW_OFFLOAD_SET_TXPWR_IDX
 	#endif
+
+	#define CONFIG_STOP_RESUME_BCN_BY_TXPAUSE 0x0E /* SCAN | JOIN | CORRECT_TSF */
 #endif
 
 #ifdef CONFIG_RTL8822B
@@ -341,6 +353,10 @@
 
 	#ifndef CONFIG_TXPWR_PG_WITH_PWR_IDX
 	#define CONFIG_TXPWR_PG_WITH_PWR_IDX
+	#endif
+
+	#ifndef CONFIG_TX_PAUSE_FW_CTRL
+	#define CONFIG_TX_PAUSE_FW_CTRL
 	#endif
 #endif /* CONFIG_RTL8822B */
 
@@ -451,6 +467,11 @@
 		#define CONFIG_NB_VALUE         RTW_NB_CONFIG_WIDTH_10      /* RTW_NB_CONFIG_NONE / RTW_NB_CONFIG_WIDTH_10 / RTW_NB_CONFIG_WIDTH_5       */
 	#endif
 	#define CONFIG_SUPPORT_DYNAMIC_TXPWR
+
+	#ifndef CONFIG_TX_PAUSE_FW_CTRL
+	#define CONFIG_TX_PAUSE_FW_CTRL
+	#endif
+	#define CONFIG_FW_OFFLOAD_PARAM_INIT
 #endif /* CONFIG_RTL8822C */
 
 #ifdef CONFIG_RTL8821C
@@ -502,6 +523,10 @@
 	#endif
 
 	#define CONFIG_BT_EFUSE_MASK
+
+	#ifndef CONFIG_TX_PAUSE_FW_CTRL
+	#define CONFIG_TX_PAUSE_FW_CTRL
+	#endif
 #endif /*CONFIG_RTL8821C*/
 
 #ifdef CONFIG_RTL8710B
@@ -618,6 +643,10 @@
 	#ifndef CONFIG_TXPWR_PG_WITH_TSSI_OFFSET
 	#define CONFIG_TXPWR_PG_WITH_TSSI_OFFSET
 	#endif
+
+	#ifndef CONFIG_TX_PAUSE_FW_CTRL
+	#define CONFIG_TX_PAUSE_FW_CTRL
+	#endif
 #endif /* CONFIG_RTL8814B */
 #ifdef CONFIG_RTL8723F
 	#undef RTL8723F_SUPPORT
@@ -720,6 +749,10 @@
 	#define CONFIG_BT_EFUSE_MASK
 
 	#define CONFIG_WRITE_BCN_LEN_TO_FW
+
+	#ifndef CONFIG_TX_PAUSE_FW_CTRL
+	#define CONFIG_TX_PAUSE_FW_CTRL
+	#endif
 #endif /* CONFIG_RTL8723F */
 
 #ifdef CONFIG_RTL8822E
@@ -755,18 +788,9 @@
 		#define RTW_BEAMFORMING_VERSION_2
 	#endif /* CONFIG_BEAMFORMING */
 
-	/* Beamforming for monitor mode (without AP/STA assoc) */
-	#ifdef CONFIG_BEAMFORMING_MONITOR
-		#undef CONFIG_BEAMFORMING
-		#undef RTW_BEAMFORMING_VERSION_2
-	#endif /* CONFIG_BEAMFORMING_MONITOR */
-
 	#ifdef CONFIG_NO_FW
 		#ifdef CONFIG_RTW_MAC_HIDDEN_RPT
 			#undef CONFIG_RTW_MAC_HIDDEN_RPT
-		#endif
-		#ifdef CONFIG_FW_DUMP_EFUSE
-			#undef CONFIG_FW_DUMP_EFUSE
 		#endif
 	#else
 		#ifndef CONFIG_RTW_MAC_HIDDEN_RPT
@@ -779,7 +803,7 @@
 	#endif /* DBG_RX_DFRAME_RAW_DATA */
 
 	#ifndef RTW_IQK_FW_OFFLOAD
-		/* #define RTW_IQK_FW_OFFLOAD */
+		/* #define RTW_IQK_FW_OFFLOAD */ /* need update FW */
 	#endif /* RTW_IQK_FW_OFFLOAD */
 	#define CONFIG_ADVANCE_OTA
 
@@ -833,21 +857,15 @@
 
 	/* #define CONFIG_RTL8822E_XCAP_NEW_POLICY */
 
-	//#define CONFIG_NARROWBAND_SUPPORTING
+	/*#define CONFIG_NARROWBAND_SUPPORTING*/
 	#ifdef CONFIG_NARROWBAND_SUPPORTING
 		#define CONFIG_NB_VALUE         RTW_NB_CONFIG_WIDTH_10      /* RTW_NB_CONFIG_NONE / RTW_NB_CONFIG_WIDTH_10 / RTW_NB_CONFIG_WIDTH_5       */
 	#endif
 	#define CONFIG_SUPPORT_DYNAMIC_TXPWR
-	#define RTW_FORCE_CTS_TO_SELF_UNDER_LOW_RSSI
-	#define CONFIG_RTW_NBI
-	#define CONFIG_TX_DUTY
-	#ifdef CONFIG_TX_DUTY
-	#define CONFIG_THERMAL_THRESOLD 55
-	#define CONFIG_DUTY_CLCLE 80
-	#define CONFIG_THERMAL_OFFSET 5
-	#endif /* CONFIG_TX_DUTY */
-	#define CONFIG_FW_OFFLOAD_PARAM_INIT
-	#define CONFIG_FW_DUMP_EFUSE
+
+	#ifndef CONFIG_TX_PAUSE_FW_CTRL
+	#define CONFIG_TX_PAUSE_FW_CTRL
+	#endif
 #endif /* CONFIG_RTL8822E */
 
 

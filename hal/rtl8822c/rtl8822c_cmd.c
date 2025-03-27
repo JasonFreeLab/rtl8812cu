@@ -546,12 +546,6 @@ static void process_c2h_event(PADAPTER adapter, u8 *c2h, u32 size)
 		rtw_bf_c2h_handler(adapter, id, pc2h_data, c2h_len);
 		break;
 #endif /* CONFIG_BEAMFORMING */
-#ifdef CONFIG_BEAMFORMING_MONITOR
-	case CMD_ID_C2H_SND_TXBF:
-		RTW_INFO("BF_MONITOR %s: [CMD_ID_C2H_SND_TXBF] len=%d\n", __FUNCTION__, c2h_payload_len);
-		bf_monitor_c2h_snd_txbf(adapter, pc2h_data, c2h_len);
-		break;
-#endif /* CONFIG_BEAMFORMING_MONITOR */
 
 	case CMD_ID_C2H_AP_REQ_TXRPT:
 		/*RTW_INFO("[C2H], C2H_AP_REQ_TXRPT!!\n");*/
@@ -577,12 +571,6 @@ static void process_c2h_event(PADAPTER adapter, u8 *c2h, u32 size)
 		if (C2H_HDR_GET_C2H_SUB_CMD_ID(pc2h_data) == C2H_SUB_CMD_ID_CCX_RPT) {
 			/* Shift C2H HDR 4 bytes */
 			c2h_ccx_rpt(adapter, pc2h_data);
-			break;
-		}
-
-		if (C2H_HDR_GET_C2H_SUB_CMD_ID(pc2h_data) == C2H_SUB_CMD_ID_C2H_PKT_FW_STATUS_NOTIFY) {
-			RTW_DBG("%s: FW_STATUS_NOTIFY\n", __FUNCTION__);
-			RTW_DBG_DUMP("C2H: ", pc2h_data, c2h_len);
 			break;
 		}
 #ifdef CONFIG_FW_HANDLE_TXBCN
@@ -655,11 +643,8 @@ void rtl8822c_c2h_handler_no_io(PADAPTER adapter, u8 *pbuf, u16 length)
 	case C2H_FW_CHNL_SWITCH_COMPLETE:
 	case C2H_IQK_FINISH:
 	case C2H_MCC:
-#ifdef CONFIG_FW_DUMP_EFUSE
-	case C2H_MAC_HIDDEN_RPT:
-	case C2H_MAC_HIDDEN_RPT_2:
-#endif
 	case C2H_BCN_EARLY_RPT:
+	case C2H_TX_PAUSE_RPT:
 	case C2H_LPS_STATUS_RPT:	
 	case C2H_EXTEND:
 		/* no I/O, process directly */

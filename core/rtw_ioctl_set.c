@@ -27,7 +27,7 @@ extern void indicate_wx_scan_complete_event(_adapter *padapter);
 	  (addr[4] == 0xff) && (addr[5] == 0xff)) ? _TRUE : _FALSE \
 	)
 
-u8 rtw_validate_bssid(u8 *bssid)
+u8 rtw_validate_bssid(const u8 *bssid)
 {
 	u8 ret = _TRUE;
 
@@ -385,7 +385,7 @@ exit:
 }
 
 u8 rtw_set_802_11_connect(_adapter *padapter,
-			  u8 *bssid, NDIS_802_11_SSID *ssid, u16 ch)
+			  const u8 *bssid, NDIS_802_11_SSID *ssid, u16 ch)
 {
 	_irqL irqL;
 	u8 status = _SUCCESS;
@@ -667,13 +667,20 @@ u8 rtw_set_acs_sitesurvey(_adapter *adapter)
 		if (band == BAND_ON_2_4G) {
 			center_chs_num = center_chs_2g_num;
 			center_chs = center_chs_2g;
-		}
+		} else
 		#if CONFIG_IEEE80211_BAND_5GHZ
 		if (band == BAND_ON_5G) {
 			center_chs_num = center_chs_5g_num;
 			center_chs = center_chs_5g;
-		}
+		} else
 		#endif
+		{
+			center_chs_num = NULL;
+			center_chs = NULL;
+		}
+
+		if (!center_chs_num || !center_chs)
+			continue;
 
 		if (rfctl->ch_sel_within_same_band) {
 			if (rtw_is_2g_ch(uch) && band != BAND_ON_2_4G)
@@ -906,6 +913,15 @@ int rtw_set_channel_plan(_adapter *adapter, u8 channel_plan, u8 chplan_6g, enum 
 int rtw_set_country(_adapter *adapter, const char *country_code, enum rtw_regd_inr inr)
 {
 #ifdef CONFIG_RTW_IOCTL_SET_COUNTRY
+#if ((0 - CONFIG_RTW_IOCTL_SET_COUNTRY - 1) == 1) && ((CONFIG_RTW_IOCTL_SET_COUNTRY + 0) != -2) /* defined to empty */
+#undef CONFIG_RTW_IOCTL_SET_COUNTRY
+#define CONFIG_RTW_IOCTL_SET_COUNTRY 1
+#endif
+#else /* not defined */
+#define CONFIG_RTW_IOCTL_SET_COUNTRY 1
+#endif
+
+#if CONFIG_RTW_IOCTL_SET_COUNTRY
 	struct registry_priv *regsty = adapter_to_regsty(adapter);
 
 	if (!REGSTY_REGD_SRC_FROM_OS(regsty))

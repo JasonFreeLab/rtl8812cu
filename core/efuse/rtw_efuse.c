@@ -1090,11 +1090,11 @@ void rtw_efuse_analyze(PADAPTER	padapter, u8 Type, u8 Fake)
 	for (i = 0; i < mapLen; i++) {
 		if (i % 16 == 0)
 			RTW_PRINT_SEL(RTW_DBGDUMP, "0x%03x: ", i);
-			_RTW_PRINT_SEL(RTW_DBGDUMP, "%02X%s"
-				, pEfuseHal->fakeEfuseInitMap[i]
-				, ((i + 1) % 16 == 0) ? "\n" : (((i + 1) % 8 == 0) ? "	  " : " ")
-			);
-		}
+		_RTW_PRINT_SEL(RTW_DBGDUMP, "%02X%s"
+			, pEfuseHal->fakeEfuseInitMap[i]
+			, ((i + 1) % 16 == 0) ? "\n" : (((i + 1) % 8 == 0) ? "	  " : " ")
+		);
+	}
 	_RTW_PRINT_SEL(RTW_DBGDUMP, "\n");
 
 out_free_buffer:
@@ -3306,7 +3306,7 @@ EFUSE_ShadowRead(
 			PADAPTER	pAdapter,
 			u8		Type,
 			u16		Offset,
-			u32		*Value)
+			void		*Value)
 {
 	if (Type == 1)
 		efuse_ShadowRead1Byte(pAdapter, Offset, (u8 *)Value);
@@ -3446,10 +3446,8 @@ void EFUSE_ShadowMapUpdate(
 #ifdef CONFIG_MP_INCLUDED
 	if (rtw_mp_mode_check(pAdapter)) {
 		PEFUSE_HAL pEfuseHal = &pHalData->EfuseHal;
-		struct mp_priv *mpp = NULL;
 
-		mpp = (struct mp_priv *)&pAdapter->mppriv;
-		if (mpp->efuse_update_on)
+		if (GET_EFUSE_UPDATE_ON(pAdapter))
 			_rtw_memcpy(pHalData->efuse_eeprom_data, pEfuseHal->fakeEfuseModifiedMap, mapLen);
 	}
 #endif

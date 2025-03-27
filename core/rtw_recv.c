@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2022 Realtek Corporation.
+ * Copyright(c) 2007 - 2021 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -72,10 +72,6 @@ sint _rtw_init_recv_priv(struct recv_priv *precvpriv, _adapter *padapter)
 	sint	res = _SUCCESS;
 
 
-#ifdef CONFIG_FW_DUMP_EFUSE
-	if (precvpriv->pallocated_frame_buf)
-		goto exit;
-#endif
 	/* We don't need to memset padapter->XXX to zero, because adapter is allocated by rtw_zvmalloc(). */
 	/* _rtw_memset((unsigned char *)precvpriv, 0, sizeof (struct  recv_priv)); */
 
@@ -97,6 +93,7 @@ sint _rtw_init_recv_priv(struct recv_priv *precvpriv, _adapter *padapter)
 	precvpriv->sink_udpport = 0;
 	precvpriv->pre_rtp_rxseq = 0;
 	precvpriv->cur_rtp_rxseq = 0;
+	precvpriv->rtp_drop_count = 0;
 
 #ifdef DBG_RX_SIGNAL_DISPLAY_RAW_DATA
 	precvpriv->store_law_data_flag = 1;
@@ -150,8 +147,6 @@ sint _rtw_init_recv_priv(struct recv_priv *precvpriv, _adapter *padapter)
 
 	precvpriv->signal_stat_sampling_interval = 2000; /* ms */
 	/* precvpriv->signal_stat_converging_constant = 5000; */ /* ms */
-
-	rtw_set_signal_stat_timer(precvpriv);
 #endif /* CONFIG_NEW_SIGNAL_STAT_PROCESS */
 
 	_rtw_memset(&precvpriv->ip_statistic, 0,
@@ -193,10 +188,8 @@ void _rtw_free_recv_priv(struct recv_priv *precvpriv)
 
 	rtw_os_recv_resource_free(precvpriv);
 
-	if (precvpriv->pallocated_frame_buf) {
+	if (precvpriv->pallocated_frame_buf)
 		rtw_vmfree(precvpriv->pallocated_frame_buf, NR_RECVFRAME * sizeof(union recv_frame) + RXFRAME_ALIGN_SZ);
-		precvpriv->pallocated_frame_buf = NULL;
-	}
 
 	rtw_hal_free_recv_priv(padapter);
 
@@ -537,11 +530,19 @@ sint recvframe_chkmic(_adapter *adapter,  union recv_frame *precvframe)
 				mickey = &stainfo->dot11tkiprxmickey.skey[0];
 			}
 
+			if (precvframe->u.hdr.len <= prxattrib->hdrlen) {
+				RTW_INFO("%s pkt_len <= hdrlen!!!\n", __func__);
+				return _FAIL;
+			}
 			datalen = precvframe->u.hdr.len - prxattrib->hdrlen - prxattrib->iv_len - prxattrib->icv_len - 8; /* icv_len included the mic code */
 			pframe = precvframe->u.hdr.rx_data;
 			payload = pframe + prxattrib->hdrlen + prxattrib->iv_len;
 
 
+			if (datalen > precvframe->u.hdr.rx_tail - precvframe->u.hdr.rx_data || datalen > precvframe->u.hdr.rx_end - precvframe->u.hdr.rx_data){
+				RTW_INFO("%s datalen is abnormal, too big!!!\n", __func__);
+				return _FAIL;
+			}
 			/* rtw_seccalctkipmic(&stainfo->dot11tkiprxmickey.skey[0],pframe,payload, datalen ,&miccode[0],(unsigned char)prxattrib->priority); */ /* care the length of the data */
 
 			rtw_seccalctkipmic(mickey, pframe, payload, datalen , &miccode[0], (unsigned char)prxattrib->priority); /* care the length of the data */
@@ -1720,7 +1721,7 @@ sint validate_recv_ctrl_frame(_adapter *padapter, union recv_frame *precv_frame)
 			if ((rtw_end_of_queue_search(xmitframe_phead, xmitframe_plist)) == _FALSE) {
 				pxmitframe = LIST_CONTAINOR(xmitframe_plist, struct xmit_frame, list);
 
-				/* xmitframe_plist = get_next(xmitframe_plist); */
+				xmitframe_plist = get_next(xmitframe_plist);
 
 				rtw_list_delete(&pxmitframe->list);
 
@@ -2514,7 +2515,8 @@ sint validate_recv_frame(_adapter *adapter, union recv_frame *precv_frame)
 		phdr->bIsWaiPacket = wai_pkt;
 
 		if (wai_pkt != 0) {
-			if (sc != adapter->wapiInfo.wapiSeqnumAndFragNum)
+			if ((sc != adapter->wapiInfo.wapiSeqnumAndFragNum)||
+				(sc == 0))
 				adapter->wapiInfo.wapiSeqnumAndFragNum = sc;
 			else {
 				retval = _FAIL;
@@ -2981,7 +2983,7 @@ static int rtw_recv_indicatepkt_check(union recv_frame *rframe, u8 *ehdr_pos, u3
 #endif
 
 	if (recvpriv->sink_udpport > 0)
-		rtw_sink_rtp_seq_dbg(adapter, ehdr_pos);
+		rtw_sink_rtp_seq_dbg(adapter, ehdr_pos, rframe->u.hdr.attrib.seq_num);
 
 #ifdef DBG_UDP_PKT_LOSE_11AC
 	#define PAYLOAD_LEN_LOC_OF_IP_HDR 0x10 /*ethernet payload length location of ip header (DA + SA+eth_type+(version&hdr_len)) */
@@ -3906,11 +3908,11 @@ int validate_mp_recv_frame(_adapter *adapter, union recv_frame *precv_frame)
 			for (i = 0; i < precv_frame->u.hdr.len; i = i + 8)
 				RTW_INFO("%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X:\n", *(ptr + i),
 					*(ptr + i + 1), *(ptr + i + 2) , *(ptr + i + 3) , *(ptr + i + 4), *(ptr + i + 5), *(ptr + i + 6), *(ptr + i + 7));
-				RTW_INFO("#############################\n");
-				_rtw_memset(pmppriv->mplink_buf, '\0' , sizeof(pmppriv->mplink_buf));
-				_rtw_memcpy(pmppriv->mplink_buf, ptr, precv_frame->u.hdr.len);
-				pmppriv->mplink_rx_len = precv_frame->u.hdr.len;
-				pmppriv->mplink_brx =_TRUE;
+			RTW_INFO("#############################\n");
+			_rtw_memset(pmppriv->mplink_buf, '\0' , sizeof(pmppriv->mplink_buf));
+			_rtw_memcpy(pmppriv->mplink_buf, ptr, precv_frame->u.hdr.len);
+			pmppriv->mplink_rx_len = precv_frame->u.hdr.len;
+			pmppriv->mplink_brx =_TRUE;
 		}
 	}
 	if (pmppriv->bloopback) {
@@ -4136,10 +4138,6 @@ int recv_frame_monitor(_adapter *padapter, union recv_frame *rframe)
 
 	if (rframe == NULL)
 		goto exit;
-
-#ifdef CONFIG_BEAMFORMING_MONITOR
-        bf_monitor_get_report_packet(padapter, rframe);
-#endif
 
 	/* read skb information from recv frame */
 	pskb = rframe->u.hdr.pkt;

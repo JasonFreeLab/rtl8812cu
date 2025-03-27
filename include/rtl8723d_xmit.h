@@ -521,7 +521,7 @@ void fill_txdesc_bmc_tx_rate(struct pkt_attrib *pattrib, u8 *ptxdesc);
 	s32 rtl8723de_hal_mgmt_xmitframe_enqueue(_adapter *padapter, struct xmit_frame *pxmitframe);
 #endif
 	s32	rtl8723de_hal_xmitframe_enqueue(_adapter *padapter, struct xmit_frame *pxmitframe);
-	void rtl8723de_xmit_tasklet(void *priv);
+	void rtl8723de_xmit_tasklet(unsigned long priv);
 #endif
 
 u8	BWMapping_8723D(PADAPTER Adapter, struct pkt_attrib *pattrib);

@@ -33,11 +33,12 @@ void rtl8822c_init_hal_spec(PADAPTER adapter)
 	/* hal_spec->sec_cam_ent_num follow halmac setting */
 	hal_spec->sec_cap = SEC_CAP_CHK_BMC | SEC_CAP_CHK_EXTRA_SEC;
 #ifdef CONFIG_USB_HCI
-	hal_spec->wow_cap = WOW_CAP_TKIP_OL/* | WOW_CAP_CSA*/ | WOW_CAP_DIS_INBAND_SIGNAL;
+	hal_spec->wow_cap = WOW_CAP_TKIP_OL/* | WOW_CAP_CSA | WOW_CAP_MDNS */| WOW_CAP_DIS_INBAND_SIGNAL;
 #else
-	hal_spec->wow_cap = WOW_CAP_TKIP_OL/* | WOW_CAP_CSA*/;
+	hal_spec->wow_cap = WOW_CAP_TKIP_OL/* | WOW_CAP_CSA | WOW_CAP_MDNS */;
 #endif
 	hal_spec->macid_cap = MACID_DROP;
+	hal_spec->txpause_cap = TXPAUSE_CAP_FW_CTRL;
 
 	hal_spec->rfpath_num_2g = 2;
 	hal_spec->rfpath_num_5g = 2;
@@ -109,15 +110,6 @@ u32 rtl8822c_power_on(PADAPTER adapter)
 
 	bMacPwrCtrlOn = _TRUE;
 	rtw_hal_set_hwreg(adapter, HW_VAR_APFM_ON_MAC, &bMacPwrCtrlOn);
-
-#ifdef CONFIG_RTW_DISABLE_HW_PDN
-	/* Disable WLPDn */
-	rtw_write8(adapter, REG_SYS_PW_CTRL + 1,
-		(rtw_read8(adapter, REG_SYS_PW_CTRL + 1) & (~BIT(7))));
-	/* Disable GPIO9 internal pull */
-	rtw_write8(adapter, REG_WL_BT_PWR_CTRL + 1,
-		(rtw_read8(adapter, REG_WL_BT_PWR_CTRL + 1) & (~BIT(6))));
-#endif
 
 out:
 	return ret;
@@ -229,21 +221,6 @@ u8 rtl8822c_mac_verify(PADAPTER adapter)
 	return _TRUE;
 }
 
-static void _efem_pinmux_config(PADAPTER adapter)
-{
-		PHAL_DATA_TYPE hal = GET_HAL_DATA(adapter);
-
-	if (hal->rfe_type == 21 || hal->rfe_type == 22) {
-		RTW_INFO("RFE type = 0x21 or 0x22, change pinmux\n");
-		rtw_halmac_rfe_ctrl_cfg(adapter_to_dvobj(adapter), 28);
-		rtw_halmac_rfe_ctrl_cfg(adapter_to_dvobj(adapter), 29);
-		rtw_halmac_rfe_ctrl_cfg(adapter_to_dvobj(adapter), 30);
-		rtw_halmac_rfe_ctrl_cfg(adapter_to_dvobj(adapter), 31);
-		rtw_halmac_rfe_ctrl_cfg(adapter_to_dvobj(adapter), 32);
-		rtw_halmac_rfe_ctrl_cfg(adapter_to_dvobj(adapter), 33);
-	}
-}
-
 void rtl8822c_init_misc(PADAPTER adapter)
 {
 	u8 v8 = 0;
@@ -270,8 +247,6 @@ void rtl8822c_init_misc(PADAPTER adapter)
 #ifdef CONFIG_TCP_CSUM_OFFLOAD_RX
 	rtw_hal_rcr_add(adapter, BIT_TCPOFLD_EN_8822C);
 #endif /* CONFIG_TCP_CSUM_OFFLOAD_RX*/
-
-	_efem_pinmux_config(adapter);
 }
 
 u32 rtl8822c_init(PADAPTER adapter)
@@ -348,8 +323,6 @@ void rtl8822c_init_default_value(PADAPTER adapter)
 	/* init Efuse variables */
 	hal->EfuseUsedBytes = 0;
 	hal->EfuseUsedPercentage = 0;
-
-	hal->EfuseHal.EfuseVerCompare = _TRUE;
 
 	hal->EfuseHal.fakeEfuseBank = 0;
 	hal->EfuseHal.fakeEfuseUsedBytes = 0;

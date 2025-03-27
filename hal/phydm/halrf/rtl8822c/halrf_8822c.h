@@ -97,4 +97,5 @@ void halrf_dack_restore_8822c(void *dm_void);
 void halrf_rfk_power_save_8822c(void *dm_void, boolean is_power_save);
 
 u8 halrf_get_thermal_8822c(void *dm_void, u8 path);
+
 #endif /*__HALRF_8822C_H__*/

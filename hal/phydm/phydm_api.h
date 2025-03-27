@@ -50,8 +50,8 @@
 #define NBI_128TONE 27 /*register table size*/
 #define NBI_256TONE 59 /*register table size*/
 
-#define NUM_START_CH_80M 14
-#define NUM_START_CH_40M 29
+#define NUM_START_CH_80M 7
+#define NUM_START_CH_40M 14
 
 #define CH_OFFSET_40M 2
 #define CH_OFFSET_80M 6

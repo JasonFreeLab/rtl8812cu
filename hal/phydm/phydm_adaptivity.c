@@ -509,23 +509,10 @@ void phydm_dig_up_bound_lmt_en(void *dm_void)
 void phydm_set_edcca_threshold(void *dm_void, s8 H2L, s8 L2H)
 {
 	struct dm_struct *dm = (struct dm_struct *)dm_void;
-	void *adapter = dm->adapter;
-	struct registry_priv *pregpriv = &((PADAPTER)adapter)->registrypriv;
-	u8 edcca_override_en;
-	s8 edcca_override_l2h_dbm;
-	
-	edcca_override_en = pregpriv->edcca_thresh_override_en; 
-	edcca_override_l2h_dbm = pregpriv->edcca_thresh_l2h_override; 
-	
+
 	if (dm->support_ic_type & ODM_IC_JGR3_SERIES) {
-		if (edcca_override_en) {
-			// +110: dBm to IGI, -8: hysteresis
-			odm_set_bb_reg(dm, R_0x84c, MASKBYTE2, (u8)(edcca_override_l2h_dbm+110) +0x80);
-			odm_set_bb_reg(dm, R_0x84c, MASKBYTE3, (u8)(edcca_override_l2h_dbm+110-8) +0x80);
-		} else {
-			odm_set_bb_reg(dm, R_0x84c, MASKBYTE2, (u8)L2H + 0x80);
-			odm_set_bb_reg(dm, R_0x84c, MASKBYTE3, (u8)H2L + 0x80);
-		}
+		odm_set_bb_reg(dm, R_0x84c, MASKBYTE2, (u8)L2H + 0x80);
+		odm_set_bb_reg(dm, R_0x84c, MASKBYTE3, (u8)H2L + 0x80);
 	} else if (dm->support_ic_type & ODM_IC_11N_SERIES) {
 		odm_set_bb_reg(dm, R_0xc4c, MASKBYTE0, (u8)L2H);
 		odm_set_bb_reg(dm, R_0xc4c, MASKBYTE2, (u8)H2L);
@@ -967,6 +954,7 @@ void phydm_adaptivity_info_init(void *dm_void, enum phydm_adapinfo cmn_info,
 		break;
 	case PHYDM_ADAPINFO_TH_L2H_INI:
 		dm->th_l2h_ini = (s8)value;
+		dm->th_l2h_ini_custom = (s8)value;
 		break;
 	case PHYDM_ADAPINFO_TH_EDCCA_HL_DIFF:
 		dm->th_edcca_hl_diff = (s8)value;
@@ -1050,8 +1038,10 @@ void phydm_adaptivity_init(void *dm_void)
 	phydm_l2h_ini_recorder_reset(dm);
 #elif (DM_ODM_SUPPORT_TYPE & ODM_CE)
 	if (!dm->carrier_sense_enable) {
-		if (dm->th_l2h_ini == 0)
+		if (dm->th_l2h_ini_custom == 0)
 			phydm_set_l2h_th_ini(dm);
+		else
+			dm->th_l2h_ini = dm->th_l2h_ini_custom;
 	} else {
 		phydm_set_l2h_th_ini_carrier_sense(dm);
 	}
@@ -1169,8 +1159,12 @@ void phydm_adaptivity(void *dm_void)
 		if (*dm->edcca_mode == PHYDM_EDCCA_ADAPT_MODE &&
 		    dm->carrier_sense_enable)
 			phydm_set_l2h_th_ini_carrier_sense(dm);
-		else if (*dm->edcca_mode == PHYDM_EDCCA_ADAPT_MODE)
-			phydm_set_l2h_th_ini(dm);
+		else if (*dm->edcca_mode == PHYDM_EDCCA_ADAPT_MODE){
+			if (dm->th_l2h_ini_custom == 0)
+				phydm_set_l2h_th_ini(dm);
+			else
+				dm->th_l2h_ini = dm->th_l2h_ini_custom;
+		}
 	}
 #endif
 	PHYDM_DBG(dm, DBG_ADPTVTY, "%s ====>\n", __func__);

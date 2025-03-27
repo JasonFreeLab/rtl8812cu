@@ -223,9 +223,6 @@ typedef enum _HW_VARIABLES {
 #ifdef CONFIG_WAKE_ON_BT
 	HW_VAR_WAKE_ON_BT_GPIO_SWITCH,
 #endif
-#if defined(CONFIG_CHANGE_DTIM_PERIOD) && defined(CONFIG_AP_MODE)
-	HW_VAR_DTIM,
-#endif
 } HW_VARIABLES;
 
 typedef enum _HAL_DEF_VARIABLE {
@@ -475,7 +472,10 @@ typedef	enum _RT_EEPROM_TYPE {
 	EEPROM_BOOT_EFUSE,
 } RT_EEPROM_TYPE, *PRT_EEPROM_TYPE;
 
-
+#ifdef CONFIG_HAL_PREINIT
+#define rtw_set_hal_pre_inited(adapter, set) (adapter_to_dvobj(adapter)->hal_pre_inited = set)
+#define rtw_get_hal_pre_inited(adapter) (adapter_to_dvobj(adapter)->hal_pre_inited)
+#endif
 
 #define RF_CHANGE_BY_INIT	0
 #define RF_CHANGE_BY_IPS	BIT28
@@ -883,7 +883,7 @@ s32 rtw_hal_macid_undrop(_adapter *adapter, u8 macid);
 s32 rtw_hal_fill_h2c_cmd(PADAPTER padapter, u8 ElementID, u32 CmdLen, u8 *pCmdBuffer);
 void rtw_hal_fill_fake_txdesc(_adapter *padapter, u8 *pDesc, u32 BufferLen,
 			      u8 IsPsPoll, u8 IsBTQosNull, u8 bDataFrame);
-u16 rtw_hal_get_txbuff_rsvd_page_num(_adapter *adapter, bool wowlan);
+u8 rtw_hal_get_txbuff_rsvd_page_num(_adapter *adapter, bool wowlan);
 
 #ifdef CONFIG_GPIO_API
 void rtw_hal_update_hisr_hsisr_ind(_adapter *padapter, u32 flag);
@@ -916,6 +916,10 @@ enum tx_pause_rson {
 	PAUSE_RSON_DFS_CSA_MG, /* allow beacon and mgnt frame */
 	PAUSE_RSON_DFS_CAC,
 	PAUSE_RSON_TOKEN_BASED_XMIT,
+	PAUSE_RSON_SCAN, /* scan */
+	PAUSE_RSON_JOIN, /* join */
+	PAUSE_RSON_CORRECT_TSF, /* correct TSF */
+	PAUSE_RSON_OTHER_BCN_CTRL, /* CTRL_TX_BCN_BY_OTHERS */
 	PAUSE_RSON_MAX
 };
 

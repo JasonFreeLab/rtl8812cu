@@ -18,8 +18,8 @@
 #if (BT_SUPPORT == 1 && COEX_SUPPORT == 1)
 
 static u8 *trace_buf = &gl_btc_trace_buf[0];
-static const u32 coex_ver_date = 20230616;
-static const u32 coex_ver = 0x33;
+static const u32 coex_ver_date = 20221215;
+static const u32 coex_ver = 0x31;
 
 static u8
 rtw_btc_rssi_state(struct btc_coexist *btc, u8 pre_state,
@@ -51,14 +51,25 @@ rtw_btc_limited_tx(struct btc_coexist *btc, boolean force_exec,
 	struct btc_coex_sta *coex_sta = &btc->coex_sta;
 	struct btc_wifi_link_info_ext *link_info_ext = &btc->wifi_link_info_ext;
 	const struct btc_chip_para *chip_para = btc->chip_para;
+	boolean wl_b_mode = FALSE;
 
 	if (!chip_para->scbd_support)
 		return;
 
+	/* Force Max Tx retry limit = 8 */
 	if (!force_exec && tx_limit_en == coex_sta->wl_tx_limit_en &&
 	    ampdu_limit_en == coex_sta->wl_ampdu_limit_en &&
 	    !link_info_ext->is_port_num_change)
 		return;
+
+	/* backup MAC reg */
+	if (!coex_sta->wl_tx_limit_en) {
+		coex_sta->wl_arfb1 = btc->btc_read_4byte(btc, REG_DARFRC);
+		coex_sta->wl_arfb2 = btc->btc_read_4byte(btc, REG_DARFRCH);
+
+		coex_sta->wl_txlimit = btc->btc_read_2byte(btc,
+							   REG_RETRY_LIMIT);
+	}
 
 	if (!coex_sta->wl_ampdu_limit_en)
 		coex_sta->wl_ampdulen =
@@ -84,6 +95,20 @@ rtw_btc_limited_tx(struct btc_coexist *btc, boolean force_exec,
 		else
 			btc->btc_write_1byte_bitmask(btc, REG_LIFETIME_EN, 0xf,
 						     0x0);
+
+		/* Max Tx retry limit = 8*/
+		btc->btc_write_2byte(btc, REG_RETRY_LIMIT, 0x0808);
+
+		btc->btc_get(btc, BTC_GET_BL_WIFI_UNDER_B_MODE, &wl_b_mode);
+
+		/* Auto rate fallback step within 8 retry*/
+		if (wl_b_mode) {
+			btc->btc_write_4byte(btc, REG_DARFRC, 0x1000000);
+			btc->btc_write_4byte(btc, REG_DARFRCH, 0x1010101);
+		} else {
+			btc->btc_write_4byte(btc, REG_DARFRC, 0x1000000);
+			btc->btc_write_4byte(btc, REG_DARFRCH, 0x4030201);
+		}
 	} else {
 		/* Set BT polluted packet on for Tx rate adaptive not
 		 *including Tx retry break by PTA, 0x45c[19] =1
@@ -97,6 +122,12 @@ rtw_btc_limited_tx(struct btc_coexist *btc, boolean force_exec,
 		 * if tx is always break by GNT_BT.
 		 */
 		btc->btc_write_1byte_bitmask(btc, REG_LIFETIME_EN, 0xf, 0x0);
+
+		/* Recovery Max Tx retry limit*/
+		btc->btc_write_2byte(btc, REG_RETRY_LIMIT,
+				     coex_sta->wl_txlimit);
+		btc->btc_write_4byte(btc, REG_DARFRC, coex_sta->wl_arfb1);
+		btc->btc_write_4byte(btc, REG_DARFRCH, coex_sta->wl_arfb2);
 	}
 
 	if (ampdu_limit_en)
@@ -296,7 +327,8 @@ rtw_btc_freerun_check(struct btc_coexist *btc)
 		bt_rssi = coex_dm->bt_rssi_state[1];
 
 	if (BTC_RSSI_HIGH(coex_dm->wl_rssi_state[3]) &&
-	    BTC_RSSI_HIGH(bt_rssi))
+	    BTC_RSSI_HIGH(bt_rssi) &&
+	    coex_sta->cnt_wl[BTC_CNT_WL_SCANAP] <= 5)
 		return TRUE;
 
 	return FALSE;
@@ -1636,8 +1668,7 @@ rtw_btc_set_tdma(struct btc_coexist *btc, u8 byte1, u8 byte2, u8 byte3,
 
 		ps_type = BTC_PS_WIFI_NATIVE;
 		rtw_btc_power_save_state(btc, ps_type, 0x0, 0x0);
-	} else if ((byte1 & BIT(4) && !(byte1 & BIT(5))) ||
-			((byte3 & BIT(4)) && (byte3 & BIT(5)))){
+	} else if (byte1 & BIT(4) && !(byte1 & BIT(5))) {
 		BTC_SPRINTF(trace_buf, BT_TMP_BUF_SIZE,
 			    "[BTCoex], %s(): Force LPS (byte1 = 0x%x)\n",
 			    __func__, byte1);
@@ -1690,7 +1721,9 @@ void rtw_btc_tdma(struct btc_coexist *btc, boolean force_exec, u32 tcase)
 	struct btc_coex_dm *coex_dm = &btc->coex_dm;
 	const struct btc_chip_para *chip_para = btc->chip_para;
 	u8 type;
-	boolean turn_on = FALSE;
+	boolean turn_on, wifi_busy = FALSE;
+
+	btc->btc_get(btc, BTC_GET_BL_WIFI_BUSY, &wifi_busy);
 
 	btc->btc_set_atomic(btc, &coex_dm->setting_tdma, TRUE);
 	/* tcase: bit0~7 --> tdma case index
@@ -1738,7 +1771,7 @@ void rtw_btc_tdma(struct btc_coexist *btc, boolean force_exec, u32 tcase)
 		}
 	} else {
 		/* TRUE -> Page scan > ACL */
-		if (!turn_on ||
+		if (!wifi_busy || !coex_sta->wl_gl_busy ||
 		    (coex_sta->bt_a2dp_exist && coex_sta->bt_inq_page_remain)) {
 			if (chip_para->scbd_bit_num == BTC_SCBD_16_BIT)
 				btc->btc_write_scbd(btc, BTC_SCBD_TDMA, FALSE);
@@ -3040,15 +3073,14 @@ static void rtw_btc_action_bt_BIS(struct btc_coexist *btc)
 	rtw_btc_set_rf_para(btc, NM_EXCU, btc->chip_para->wl_rf_para_rx[0]);
 
 	if (btc->board_info.btdm_ant_num == 1) { /* Shared-Ant */
-#if 0
 		coex_sta->wl_coex_mode = BTC_WLINK_2GFREE;
 		table_case = 39;
 		tdma_case = 0;
-#endif
+#if 0
 		/* TDMA by wifi fw */
 		table_case = 38;
 		tdma_case = 28;
-
+#endif
 	} else { /* Non-Shared-Ant */
 		table_case = 100;
 		tdma_case = 100;
@@ -3083,18 +3115,8 @@ static void rtw_btc_action_bt_CIS(struct btc_coexist *btc)
 static void rtw_btc_action_wl_off(struct btc_coexist *btc)
 {
 	const struct btc_chip_para *chip_para = btc->chip_para;
-	u8 table_case, tdma_case;
 
-	if (btc->board_info.btdm_ant_num == 1) {
-		table_case = 1;
-		tdma_case = 0;
-	} else {
-		table_case = 100;
-		tdma_case = 100;
-	}
-
-	rtw_btc_table(btc, NM_EXCU, table_case);
-	rtw_btc_tdma(btc, FC_EXCU, tdma_case);
+	rtw_btc_tdma(btc, FC_EXCU, 0);
 	rtw_btc_ignore_wlan_act(btc, FC_EXCU, TRUE);
 	rtw_btc_set_ant_path(btc, FC_EXCU, BTC_ANT_WOFF);
 	rtw_btc_set_rf_para(btc, NM_EXCU, btc->chip_para->wl_rf_para_rx[0]);

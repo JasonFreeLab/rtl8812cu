@@ -33,14 +33,14 @@ static inline int rtw_nlrtw_radio_opmode_notify(struct rf_ctl_t *rfctl) {return 
 
 #if defined(CONFIG_RTW_NLRTW) && defined(CONFIG_DFS_MASTER)
 int rtw_nlrtw_radar_detect_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 cch, u8 bw);
-int rtw_nlrtw_cac_finish_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 cch, u8 bw);
-int rtw_nlrtw_cac_abort_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 cch, u8 bw);
+int rtw_nlrtw_cac_finish_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 ifbmp, u8 cch, u8 bw);
+int rtw_nlrtw_cac_abort_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 ifbmp, u8 cch, u8 bw);
 int rtw_nlrtw_nop_finish_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 band, u8 cch, u8 bw);
 int rtw_nlrtw_nop_start_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 band, u8 cch, u8 bw);
 #else
 static inline int rtw_nlrtw_radar_detect_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 cch, u8 bw) {return _FAIL;}
-static inline int rtw_nlrtw_cac_finish_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 cch, u8 bw) {return _FAIL;}
-static inline int rtw_nlrtw_cac_abort_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 cch, u8 bw) {return _FAIL;}
+static inline int rtw_nlrtw_cac_finish_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 ifbmp, u8 cch, u8 bw) {return _FAIL;}
+static inline int rtw_nlrtw_cac_abort_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 ifbmp, u8 cch, u8 bw) {return _FAIL;}
 static inline int rtw_nlrtw_nop_finish_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 band, u8 cch, u8 bw) {return _FAIL;}
 static inline int rtw_nlrtw_nop_start_event(struct rf_ctl_t *rfctl, u8 band_idx, u8 band, u8 cch, u8 bw) {return _FAIL;}
 #endif /* defined(CONFIG_RTW_NLRTW) && defined(CONFIG_DFS_MASTER) */

@@ -16,6 +16,48 @@
 
 #include <drv_types.h>
 
+const char *const _rtw_ch_type_str[] = {
+	[RTW_CHT_DIS]		= "DIS",
+	[RTW_CHT_NO_IR]		= "NO_IR",
+	[RTW_CHT_DFS]		= "DFS",
+	[RTW_CHT_NO_HT40U]	= "NO_40M+",
+	[RTW_CHT_NO_HT40L]	= "NO_40M-",
+	[RTW_CHT_NO_80MHZ]	= "NO_80M",
+	[RTW_CHT_NO_160MHZ]	= "NO_160M",
+	[RTW_CHT_NUM]		= "UNKNOWN",
+};
+
+enum rtw_ch_type get_ch_type_from_str(const char *str, size_t str_len)
+{
+	u8 i;
+
+	for (i = 0; i < RTW_CHT_NUM; i++)
+		if (str_len == strlen(rtw_ch_type_str(i))
+			&& strncmp(str, rtw_ch_type_str(i), str_len) == 0)
+			return i;
+	return RTW_CHT_NUM;
+}
+
+char *rtw_get_ch_flags_str(char *buf, u8 flags, char delim)
+{
+	char *pos = buf;
+	char d_str[2] = {delim, '\0'};
+	int i;
+
+	for (i = 0; i < RTW_CHT_NUM; i++) {
+		if (!(flags & BIT(i)))
+			continue;
+		pos += snprintf(pos, RTW_CH_FLAGS_STR_LEN - (pos - buf), "%s%s"
+			, pos == buf ? "" : d_str, rtw_ch_type_str(i));
+		if (pos >= buf + RTW_CH_FLAGS_STR_LEN - 1)
+			break;
+	}
+	if (pos == buf)
+		*buf = '\0';
+
+	return buf;
+}
+
 int rtw_chset_init(struct rtw_chset *chset, u8 band_bmp)
 {
 	u8 ch_num = 0;
@@ -145,10 +187,12 @@ static u8 _rtw_chset_is_bchbw_valid(const struct rtw_chset *chset, enum band_typ
 		ch_idx = rtw_chset_search_bch(chset, band, *(op_chs + i));
 		if (ch_idx == -1)
 			break;
-		if (chset->chs[ch_idx].flags & RTW_CHF_NO_IR) {
-			if (!allow_passive
-				|| (!allow_primary_passive && chset->chs[ch_idx].ChannelNum == ch))
-			break;
+		if (!allow_passive && chset->chs[ch_idx].flags & RTW_CHF_NO_IR) {
+			/* all sub chs are passive is not allowed and one of sub ch is NO_IR */
+			if (!allow_primary_passive) /* even primary ch is not allow to be NO_IR */
+				break;
+			if (chset->chs[ch_idx].ChannelNum != ch) /* allow primary ch NO_IR, but this is not primary ch */
+				break;
 		}
 		if (bw >= CHANNEL_WIDTH_40) {
 			if ((chset->chs[ch_idx].flags & RTW_CHF_NO_HT40U) && i % 2 == 0)
@@ -297,27 +341,39 @@ u8 *rtw_chset_set_spt_chs_ie(struct rtw_chset *chset, u8 *buf_pos, uint *buf_len
 #ifdef CONFIG_PROC_DEBUG
 void dump_chinfos(void *sel, const RT_CHANNEL_INFO *chinfos, u8 chinfo_num)
 {
-	char buf[8];
+	u32 bhint_sec;
+	char bhint_buf[8];
 	u16 non_ocp_sec;
+	char non_ocp_buf[8];
+	char flags_buf[RTW_CH_FLAGS_STR_LEN];
 	u8 enable_ch_num = 0;
 	u8 i;
 
-	RTW_PRINT_SEL(sel, "%-3s %-4s %-4s flags\n", "ch", "freq", "nocp");
+	RTW_PRINT_SEL(sel, "%-3s %-4s %-5s %-4s flags\n", "ch", "freq", "bhint", "nocp");
 
 	for (i = 0; i < chinfo_num; i++) {
 		if (chinfos[i].flags & RTW_CHF_DIS)
 			continue;
 		enable_ch_num++;
+
+		bhint_sec = 0;
+		if (CH_IS_BCN_HINT(&chinfos[i])) {
+			bhint_sec = rtw_systime_to_ms(chinfos[i].bcn_hint_end_time - rtw_get_current_time()) / 1000;
+			if (bhint_sec > 99999)
+				bhint_sec = 99999;
+		}
+		snprintf(bhint_buf, 8, "%d", bhint_sec);
+
 		non_ocp_sec = 0;
 		#ifdef CONFIG_DFS_MASTER
 		if (CH_IS_NON_OCP(&chinfos[i]))
 			non_ocp_sec = rtw_systime_to_ms(chinfos[i].non_ocp_end_time - rtw_get_current_time()) / 1000;
 		#endif
-		snprintf(buf, 8, "%d", non_ocp_sec);
+		snprintf(non_ocp_buf, 8, "%d", non_ocp_sec);
 
-		RTW_PRINT_SEL(sel, "%3u %4u %4s"RTW_CHF_FMT"\n"
-			, chinfos[i].ChannelNum, rtw_bch2freq(chinfos[i].band, chinfos[i].ChannelNum), buf
-			, RTW_CHF_ARG(chinfos[i].flags)
+		RTW_PRINT_SEL(sel, "%3u %4u %5s %4s %s\n"
+			, chinfos[i].ChannelNum, rtw_bch2freq(chinfos[i].band, chinfos[i].ChannelNum)
+			, bhint_buf, non_ocp_buf, rtw_get_ch_flags_str(flags_buf, chinfos[i].flags, ' ')
 		);
 	}
 

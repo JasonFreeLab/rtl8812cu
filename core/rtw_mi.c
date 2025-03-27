@@ -53,7 +53,7 @@ static u8 _rtw_mi_p2p_listen_scan_chk(_adapter *adapter)
 #endif
 #endif
 
-u8 rtw_mi_stayin_union_ch_chk(_adapter *adapter)
+u8 rtw_mi_stayin_union_ch_chk(_adapter *adapter, bool fail_detail)
 {
 	u8 rst = _TRUE;
 	u8 u_ch, u_bw, u_offset;
@@ -70,20 +70,20 @@ u8 rtw_mi_stayin_union_ch_chk(_adapter *adapter)
 	if ((u_ch != o_ch) || (u_bw != o_bw) || (u_offset != o_offset))
 		rst = _FALSE;
 
-	#ifdef DBG_IFACE_STATUS
-	if (rst == _FALSE) {
+	if (rst == _FALSE && fail_detail) {
 		RTW_ERR("%s Not stay in union channel\n", __func__);
 		if (GET_HAL_DATA(adapter)->bScanInProcess == _TRUE)
 			RTW_ERR("ScanInProcess\n");
+		#ifdef DBG_IFACE_STATUS
 		#ifdef CONFIG_P2P
 		if (_rtw_mi_p2p_listen_scan_chk(adapter))
 			RTW_ERR("P2P in listen or scan state\n");
 		#endif
+		#endif
 		RTW_ERR("union ch, bw, offset: %u,%u,%u\n", u_ch, u_bw, u_offset);
 		RTW_ERR("oper ch, bw, offset: %u,%u,%u\n", o_ch, o_bw, o_offset);
-		RTW_ERR("=========================\n");
 	}
-	#endif
+
 	return rst;
 }
 
@@ -193,10 +193,12 @@ int rtw_mi_get_bch_setting_union_by_hwband(struct dvobj_priv *dvobj, u8 band_idx
 	/* this driver has only one hwband and 2G/5G only */
 	int ret = rtw_mi_get_ch_setting_union_by_ifbmp(dvobj, 0xFF, ch, bw, offset);
 
-	if (ret)
-		*band = rtw_is_2g_ch(*ch) ? BAND_ON_24G : BAND_ON_5G;
-	else
-		*band = BAND_MAX;
+	if (band) {
+		if (ret && ch)
+			*band = rtw_is_2g_ch(*ch) ? BAND_ON_24G : BAND_ON_5G;
+		else
+			*band = BAND_MAX;
+	}
 
 	return ret;
 }
@@ -207,10 +209,12 @@ int rtw_mi_get_bch_setting_union_by_hwband_ifbmp(struct dvobj_priv *dvobj, u8 ba
 	/* this driver has only one hwband and 2G/5G only */
 	int ret = rtw_mi_get_ch_setting_union_by_ifbmp(dvobj, ifbmp, ch, bw, offset);
 
-	if (ret)
-		*band = rtw_is_2g_ch(*ch) ? BAND_ON_24G : BAND_ON_5G;
-	else
-		*band = BAND_MAX;
+	if (band) {
+		if (ret && ch)
+			*band = rtw_is_2g_ch(*ch) ? BAND_ON_24G : BAND_ON_5G;
+		else
+			*band = BAND_MAX;
+	}
 
 	return ret;
 }
@@ -1505,7 +1509,6 @@ void rtw_mi_buddy_clone_bcmc_packet(_adapter *padapter, union recv_frame *precvf
 
 }
 
-#ifdef CONFIG_PCI_HCI
 /*API be created temporary for MI, caller is interrupt-handler, PCIE's interrupt handler cannot apply to multi-AP*/
 _adapter *rtw_mi_get_ap_adapter(_adapter *padapter)
 {
@@ -1525,7 +1528,6 @@ _adapter *rtw_mi_get_ap_adapter(_adapter *padapter)
 	}
 	return iface;
 }
-#endif
 
 u8 rtw_mi_get_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
 {
@@ -1562,7 +1564,7 @@ _adapter *rtw_mi_get_iface_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
 	return NULL;
 }
 
-u8 rtw_mi_get_ld_sta_ifbmp(_adapter *adapter)
+static u8 rtw_mi_get_sta_ifbmp(_adapter *adapter, u32 mlme_sbmp)
 {
 	struct dvobj_priv *dvobj = adapter_to_dvobj(adapter);
 	int i;
@@ -1574,17 +1576,33 @@ u8 rtw_mi_get_ld_sta_ifbmp(_adapter *adapter)
 		if (!iface)
 			continue;
 
-		if (MLME_IS_STA(iface) && MLME_IS_ASOC(iface))
+		if (MLME_IS_STA(iface) && (!mlme_sbmp || CHK_MLME_STATE(iface, mlme_sbmp)))
 			ifbmp |= BIT(i);
 	}
 
 	return ifbmp;
 }
 
+u8 rtw_mi_get_ld_sta_ifbmp(_adapter *adapter)
+{
+	return rtw_mi_get_sta_ifbmp(adapter, WIFI_ASOC_STATE);
+}
+
 u8 rtw_mi_get_ld_sta_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
 {
 	/* this driver has only one hwband, bypass band_idx */
 	return rtw_mi_get_ld_sta_ifbmp(dvobj_get_primary_adapter(dvobj));
+}
+
+u8 rtw_mi_get_lgd_sta_ifbmp(_adapter *adapter)
+{
+	return rtw_mi_get_sta_ifbmp(adapter, WIFI_UNDER_LINKING | WIFI_ASOC_STATE);
+}
+
+u8 rtw_mi_get_lgd_sta_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
+{
+	/* this driver has only one hwband, bypass band_idx */
+	return rtw_mi_get_lgd_sta_ifbmp(dvobj_get_primary_adapter(dvobj));
 }
 
 u8 rtw_mi_get_ap_mesh_ifbmp(_adapter *adapter)
@@ -1693,4 +1711,30 @@ _adapter *rtw_mi_get_linking_adapter(_adapter *adapter)
 		iface = NULL;
 	}
 	return iface;
+}
+
+u32 ifbmp_to_iflbmp(u8 ifbmp)
+{
+	u8 i, j;
+	u32 iflbmp = 0;
+
+	for (i = 0; i < CONFIG_IFACE_NUMBER; i++) {
+		for (j = 0; j < RTW_RLINK_MAX; j++) {
+			iflbmp |= (ifbmp & BIT(i)) << (j * CONFIG_IFACE_NUMBER);
+		}
+	}
+	return iflbmp;
+}
+
+u8 iflbmp_to_ifbmp(u32 iflbmp)
+{
+	u8 i, j;
+	u8 ifbmp = 0;
+
+	for (i = 0; i < CONFIG_IFACE_NUMBER; i++) {
+		for (j = 0; j < RTW_RLINK_MAX; j++) {
+			ifbmp |= (iflbmp >> (j * CONFIG_IFACE_NUMBER)) & BIT(i);
+		}
+	}
+	return ifbmp;
 }

@@ -16,7 +16,7 @@
 #include <drv_types.h>
 #include <hal_data.h>
 
-#ifdef CONFIG_RTW_80211R
+#if defined(CONFIG_IOCTL_CFG80211) && defined(CONFIG_RTW_80211R)
 
 #ifndef RTW_FT_DBG
 	#define RTW_FT_DBG	0
@@ -211,7 +211,7 @@ err_2:
 }
 
 void rtw_ft_validate_akm_type(_adapter  *padapter,
-	struct wlan_network *pnetwork)
+	WLAN_BSSID_EX *network)
 {
 	struct security_priv *psecuritypriv = &(padapter->securitypriv);
 	struct ft_roam_info *pft_roam = &(padapter->mlmepriv.ft_roam);
@@ -220,16 +220,16 @@ void rtw_ft_validate_akm_type(_adapter  *padapter,
 
 	/*IEEE802.11-2012 Std. Table 8-101-AKM suite selectors*/
 	if (rtw_ft_valid_akm(padapter, psecuritypriv->rsn_akm_suite_type)) {
-		ptmp = rtw_get_ie(&pnetwork->network.IEs[12],
+		ptmp = rtw_get_ie(&network->IEs[12],
 				_MDIE_, &tmp_len,
-				(pnetwork->network.IELength-12));
+				(network->IELength-12));
 		if (ptmp) {
 			pft_roam->mdid = *(u16 *)(ptmp+2);
 			pft_roam->ft_cap = *(ptmp+4);
 
 			RTW_INFO("FT: target "MAC_FMT
 				" mdid=(0x%2x), capacity=(0x%2x)\n",
-				MAC_ARG(pnetwork->network.MacAddress),
+				MAC_ARG(network->MacAddress),
 				pft_roam->mdid, pft_roam->ft_cap);
 
 			rtw_ft_set_flags(padapter, RTW_FT_PEER_EN);
@@ -931,4 +931,4 @@ void rtw_ft_build_assoc_rsp_ies(_adapter *padapter,
 
 }
 #endif /* CONFIG_RTW_80211R_AP */
-#endif /* CONFIG_RTW_80211R */
+#endif /* CONFIG_IOCTL_CFG80211 && CONFIG_RTW_80211R */

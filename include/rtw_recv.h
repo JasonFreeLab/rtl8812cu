@@ -30,11 +30,9 @@
 		#define NR_RECVBUFF (8)
 	#endif
 #endif /* CONFIG_SINGLE_RECV_BUF */
-#ifdef CONFIG_PREALLOC_RX_SKB_BUFFER
-	#define NR_PREALLOC_RECV_SKB (rtw_rtkm_get_nr_recv_skb()>>1)
-#else /*!CONFIG_PREALLOC_RX_SKB_BUFFER */
+#ifndef NR_PREALLOC_RECV_SKB
 	#define NR_PREALLOC_RECV_SKB 8
-#endif /* CONFIG_PREALLOC_RX_SKB_BUFFER */
+#endif /* NR_PREALLOC_RECV_SKB */
 
 #ifdef CONFIG_RTW_NAPI
 	#define RTL_NAPI_WEIGHT (32)
@@ -232,8 +230,10 @@ struct rx_pkt_attrib	{
 #elif defined(CONFIG_PLATFORM_RTK390X)
 	#define RECVBUFF_ALIGN_SZ 32
 #else
+#ifndef RECVBUFF_ALIGN_SZ
 	/* Avoid the Synopsys USB host receive buffer size limit */
 	#define RECVBUFF_ALIGN_SZ 4096
+#endif
 #endif
 #else
 	#define RECVBUFF_ALIGN_SZ 8
@@ -540,6 +540,8 @@ struct recv_priv {
 	struct smooth_rssi_data signal_strength_data;
 #endif /* CONFIG_NEW_SIGNAL_STAT_PROCESS */
 	u16 sink_udpport, pre_rtp_rxseq, cur_rtp_rxseq;
+	u16 pre_wifi_seq, cur_wifi_seq;
+	u64 rtp_drop_count;
 
 	BOOLEAN store_law_data_flag;
 };

@@ -15,34 +15,34 @@
 #ifndef __RTW_CHSET_H__
 #define __RTW_CHSET_H__
 
-enum {
-	RTW_CHF_DIS = BIT0,
-	RTW_CHF_NO_IR = BIT1,
-	RTW_CHF_DFS = BIT2,
-	RTW_CHF_NO_HT40U = BIT3,
-	RTW_CHF_NO_HT40L = BIT4,
-	RTW_CHF_NO_80MHZ = BIT5,
-	RTW_CHF_NO_160MHZ = BIT6,
+enum rtw_ch_type {
+	RTW_CHT_DIS		= 0,
+	RTW_CHT_NO_IR		= 1,
+	RTW_CHT_DFS		= 2,
+	RTW_CHT_NO_HT40U	= 3,
+	RTW_CHT_NO_HT40L	= 4,
+	RTW_CHT_NO_80MHZ	= 5,
+	RTW_CHT_NO_160MHZ	= 6,
+	RTW_CHT_NUM,
 };
 
-#define RTW_CHF_FMT "%s%s%s%s%s%s%s"
+extern const char *const _rtw_ch_type_str[];
+#define rtw_ch_type_str(type) (((type) >= RTW_CHT_NUM) ? _rtw_ch_type_str[RTW_CHT_NUM] : _rtw_ch_type_str[(type)])
 
-#define RTW_CHF_ARG_DIS(flags)			(flags & RTW_CHF_DIS) ? " DIS" : ""
-#define RTW_CHF_ARG_NO_IR(flags)		(flags & RTW_CHF_NO_IR) ? " NO_IR" : ""
-#define RTW_CHF_ARG_DFS(flags)			(flags & RTW_CHF_DFS) ? " DFS" : ""
-#define RTW_CHF_ARG_NO_HT40U(flags)		(flags & RTW_CHF_NO_HT40U) ? " NO_40M+" : ""
-#define RTW_CHF_ARG_NO_HT40L(flags)		(flags & RTW_CHF_NO_HT40L) ? " NO_40M-" : ""
-#define RTW_CHF_ARG_NO_80MHZ(flags)		(flags & RTW_CHF_NO_80MHZ) ? " NO_80M" : ""
-#define RTW_CHF_ARG_NO_160MHZ(flags)	(flags & RTW_CHF_NO_160MHZ) ? " NO_160M" : ""
+enum rtw_ch_type get_ch_type_from_str(const char *str, size_t str_len);
 
-#define RTW_CHF_ARG(flags) \
-	RTW_CHF_ARG_DIS(flags) \
-	, RTW_CHF_ARG_NO_IR(flags) \
-	, RTW_CHF_ARG_DFS(flags) \
-	, RTW_CHF_ARG_NO_HT40U(flags) \
-	, RTW_CHF_ARG_NO_HT40L(flags) \
-	, RTW_CHF_ARG_NO_80MHZ(flags) \
-	, RTW_CHF_ARG_NO_160MHZ(flags)
+enum {
+	RTW_CHF_DIS 		= BIT(RTW_CHT_DIS),
+	RTW_CHF_NO_IR		= BIT(RTW_CHT_NO_IR),
+	RTW_CHF_DFS		= BIT(RTW_CHT_DFS),
+	RTW_CHF_NO_HT40U	= BIT(RTW_CHT_NO_HT40U),
+	RTW_CHF_NO_HT40L	= BIT(RTW_CHT_NO_HT40L),
+	RTW_CHF_NO_80MHZ	= BIT(RTW_CHT_NO_80MHZ),
+	RTW_CHF_NO_160MHZ	= BIT(RTW_CHT_NO_160MHZ),
+};
+
+#define RTW_CH_FLAGS_STR_LEN (45)
+char *rtw_get_ch_flags_str(char *buf, u8 flags, char delim);
 
 /* The channel information about this channel including joining, scanning, and power constraints. */
 typedef struct _RT_CHANNEL_INFO {
@@ -56,22 +56,30 @@ typedef struct _RT_CHANNEL_INFO {
 	*/
 	u8 flags;
 
+	bool reg_no_ir;
+	systime bcn_hint_end_time;
+
 #ifdef CONFIG_FIND_BEST_CHANNEL
 	u32 rx_count;
 #endif
 
 #if CONFIG_IEEE80211_BAND_5GHZ && CONFIG_DFS
 	#ifdef CONFIG_DFS_MASTER
+	bool cac_done;
 	systime non_ocp_end_time;
 	#endif
 #endif
 
 	u8 hidden_bss_cnt; /* per scan count */
 
-#ifdef CONFIG_IOCTL_CFG80211
+#if defined(CONFIG_IOCTL_CFG80211) && !RTW_PER_ADAPTER_WIPHY
 	void *os_chan;
 #endif
 } RT_CHANNEL_INFO, *PRT_CHANNEL_INFO;
+
+#define RTW_BCN_HINT_STOPPED 0 /* used by bcn_hint_end_time time stamps */
+#define CH_IS_BCN_HINT_STOPPED(rt_ch_info) ((rt_ch_info)->bcn_hint_end_time == RTW_BCN_HINT_STOPPED)
+#define CH_IS_BCN_HINT(rt_ch_info) (!CH_IS_BCN_HINT_STOPPED(rt_ch_info) && rtw_time_after((rt_ch_info)->bcn_hint_end_time, rtw_get_current_time()))
 
 struct rtw_chset {
 	RT_CHANNEL_INFO chs[MAX_CHANNEL_NUM];

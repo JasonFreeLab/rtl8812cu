@@ -15,7 +15,7 @@
 #ifndef __RTW_ROCH_H__
 #define __RTW_ROCH_H__
 
-/* #include <drv_types.h> */
+#include <drv_types.h>
 
 struct rtw_roch_parm;
 

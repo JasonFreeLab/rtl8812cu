@@ -4236,9 +4236,9 @@ s8 phydm_get_tssi_trim_de_8822e(void *dm_void, u8 path)
 		group = 1;
 	else if (channel >= 10 && channel <= 14)
 		group = 2;
-	else if (channel >= 16 && channel <= 50)
+	else if (channel >= 36 && channel <= 50)
 		group = 3;
-	else if (channel >= 52 && channel <= 98)
+	else if (channel >= 52 && channel <= 64)
 		group = 4;
 	else if (channel >= 100 && channel <= 118)
 		group = 5;
@@ -4246,7 +4246,7 @@ s8 phydm_get_tssi_trim_de_8822e(void *dm_void, u8 path)
 		group = 6;
 	else if (channel >= 149 && channel <= 165)
 		group = 7;
-	else if (channel >= 167 && channel <= 253)
+	else if (channel >= 167 && channel <= 177)
 		group = 8;
 	else {
 		RF_DBG(dm, DBG_RF_MP, "[kfree] Channel(%d) is not exist in Group\n",
@@ -4645,15 +4645,15 @@ void phydm_do_kfree(void *dm_void, u8 channel_to_sw)
 		}
 	} else if (*dm->band_type == ODM_BAND_5G &&
 		   pwrtrim->flag & KFREE_FLAG_ON_5G) {
-		if (channel_to_sw >= 16 && channel_to_sw <= 48)
+		if (channel_to_sw >= 36 && channel_to_sw <= 48)
 			channel_idx = PHYDM_5GLB1;
-		if (channel_to_sw >= 52 && channel_to_sw <= 96)
+		if (channel_to_sw >= 52 && channel_to_sw <= 64)
 			channel_idx = PHYDM_5GLB2;
 		if (channel_to_sw >= 100 && channel_to_sw <= 120)
 			channel_idx = PHYDM_5GMB1;
 		if (channel_to_sw >= 122 && channel_to_sw <= 144)
 			channel_idx = PHYDM_5GMB2;
-		if (channel_to_sw >= 149 && channel_to_sw <= 253)
+		if (channel_to_sw >= 149 && channel_to_sw <= 177)
 			channel_idx = PHYDM_5GHB;
 
 		for (rfpath = RF_PATH_A; rfpath < max_path; rfpath++) {

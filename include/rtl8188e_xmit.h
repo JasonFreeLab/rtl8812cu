@@ -281,7 +281,7 @@ void fill_txdesc_force_bmc_camid(struct pkt_attrib *pattrib, struct tx_desc *ptx
 	s32 rtl8188ee_hal_mgmt_xmitframe_enqueue(_adapter *padapter, struct xmit_frame *pxmitframe);
 #endif
 	s32	rtl8188ee_hal_xmitframe_enqueue(_adapter *padapter, struct xmit_frame *pxmitframe);
-	void rtl8188ee_xmit_tasklet(void *priv);
+	void rtl8188ee_xmit_tasklet(unsigned long priv);
 #endif
 
 

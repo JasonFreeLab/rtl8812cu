@@ -28,9 +28,9 @@
 #define CENTER_CH_2G_NUM		14
 #define CENTER_CH_2G_40M_NUM	9
 
-#define CENTER_CH_5G_20M_NUM	60	/* 20M center channels */
-#define CENTER_CH_5G_40M_NUM	28	/* 40M center channels */
-#define CENTER_CH_5G_80M_NUM	13	/* 80M center channels */
+#define CENTER_CH_5G_20M_NUM	28	/* 20M center channels */
+#define CENTER_CH_5G_40M_NUM	14	/* 40M center channels */
+#define CENTER_CH_5G_80M_NUM	7	/* 80M center channels */
 #define CENTER_CH_5G_160M_NUM	3	/* 160M center channels */
 #define CENTER_CH_5G_ALL_NUM	(CENTER_CH_5G_20M_NUM + CENTER_CH_5G_40M_NUM + CENTER_CH_5G_80M_NUM)
 
@@ -107,6 +107,7 @@ u8 rtw_get_scch_by_bcch_opch(enum band_type band, u8 cch, u8 bw, u8 opch);
 u8 rtw_get_op_chs_by_bcch_bw(enum band_type band, u8 cch, u8 bw, u8 **op_chs, u8 *op_ch_num);
 
 u8 rtw_get_offset_by_bchbw(enum band_type band, u8 ch, u8 bw, u8 *r_offset);
+u8 rtw_get_offsets_by_bchbw(enum band_type band, u8 ch, u8 bw, u8 *r_offset, u8 *r_offset_num);
 u8 rtw_get_center_ch_by_band(enum band_type band, u8 ch, u8 bw, u8 offset);
 
 bool rtw_is_bchbw_grouped(enum band_type band_a, u8 ch_a, u8 bw_a, u8 offset_a
@@ -199,7 +200,21 @@ extern const u8 _opc_bw_to_ch_width[OPC_BW_NUM];
 #define opc_bw_to_ch_width(bw) (((bw) < OPC_BW_NUM) ? _opc_bw_to_ch_width[(bw)] : CHANNEL_WIDTH_MAX)
 
 /* global op class APIs */
+struct op_class_t {
+	u8 class_id;
+	enum band_type band;
+	enum opc_bw bw;
+	u8 *len_ch_attr;
+};
+
+#define OPC_CH_LIST_LEN(_opc) (_opc.len_ch_attr[0])
+#define OPC_CH_LIST_CH(_opc, _i) (_opc.len_ch_attr[_i + 1])
+
+extern const struct op_class_t global_op_class[];
+extern const int global_op_class_num;
+const struct op_class_t *get_global_op_class_by_id(u8 gid);
 bool is_valid_global_op_class_id(u8 gid);
+bool is_valid_global_op_class_ch(const struct op_class_t *opc, u8 ch);
 s16 get_sub_op_class(u8 gid, u8 ch);
 void dump_global_op_class(void *sel);
 RTW_FUNC_2G_5G_ONLY u8 rtw_get_op_class_by_chbw(u8 ch, u8 bw, u8 offset);
@@ -232,7 +247,7 @@ void rtw_rfctl_op_class_pref_deinit(struct rf_ctl_t *rfctl);
 #define REG_TXPWR_CHANGE	1
 #define REG_CHANGE			2
 
-void op_class_pref_apply_regulatory(_adapter *adapter, u8 reason);
+void op_class_pref_apply_regulatory(struct rf_ctl_t *rfctl, u8 reason);
 
 struct rf_ctl_t;
 void dump_cap_spt_op_class_ch(void *sel, struct rf_ctl_t *rfctl, bool detail);
@@ -284,6 +299,7 @@ RTW_FUNC_2G_5G_ONLY int rtw_ch2freq(int chan);
 int rtw_bch2freq(enum band_type band, int ch);
 int rtw_freq2ch(int freq);
 enum band_type rtw_freq2band(int freq);
+enum channel_width rtw_frange_to_bw(u32 hi, u32 lo);
 bool rtw_freq_consecutive(int a, int b);
 bool rtw_bcchbw_to_freq_range(enum band_type band, u8 c_ch, u8 bw, u32 *hi, u32 *lo);
 bool rtw_bchbw_to_freq_range(enum band_type band, u8 ch, u8 bw, u8 offset, u32 *hi, u32 *lo);
@@ -319,7 +335,7 @@ void rtw_rf_set_tx_gain_offset(_adapter *adapter, u8 path, s8 offset);
 void rtw_rf_apply_tx_gain_offset(_adapter *adapter, u8 ch);
 
 RTW_FUNC_2G_5G_ONLY static inline bool rtw_is_2g_ch(u8 ch) { return ch >= 1 && ch <= 14; }
-RTW_FUNC_2G_5G_ONLY static inline bool rtw_is_5g_ch(u8 ch) { return ch >= 16 && ch <= 253; }
+RTW_FUNC_2G_5G_ONLY static inline bool rtw_is_5g_ch(u8 ch) { return ch >= 36 && ch <= 177; }
 
 bool rtw_is_long_cac_range(u32 hi, u32 lo, u8 dfs_region);
 RTW_FUNC_2G_5G_ONLY bool rtw_is_long_cac_ch(u8 ch, u8 bw, u8 offset, u8 dfs_region);

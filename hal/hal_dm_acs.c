@@ -142,20 +142,21 @@ void rtw_acs_trigger(_adapter *adapter, u16 scan_time_ms, u8 scan_chan, enum NHM
 	HAL_DATA_TYPE *hal_data = GET_HAL_DATA(adapter);
 	struct dm_struct *phydm = adapter_to_phydm(adapter);
 #if (RTK_ACS_VERSION == 3)
-	struct clm_para_info clm_para;
-	struct nhm_para_info nhm_para;
-	struct env_trig_rpt trig_rpt;
+	struct clm_para_info clm_para = {0};
+	struct nhm_para_info nhm_para = {0};
+	struct env_trig_rpt trig_rpt = {0};
+	bool en_1db_mode = _FALSE;
 
 	scan_time_ms -= 10;
 
 	init_acs_clm(clm_para, scan_time_ms);
 
 	if (pid == NHM_PID_IEEE_11K_HIGH)
-		init_11K_high_nhm(nhm_para, scan_time_ms);
+		init_11K_high_nhm(nhm_para, scan_time_ms, en_1db_mode);
 	else if (pid == NHM_PID_IEEE_11K_LOW)
-		init_11K_low_nhm(nhm_para, scan_time_ms);
+		init_11K_low_nhm(nhm_para, scan_time_ms, en_1db_mode);
 	else
-		init_acs_nhm(nhm_para, scan_time_ms);
+		init_acs_nhm(nhm_para, scan_time_ms, en_1db_mode);
 
 	hal_data->acs.trig_rst = phydm_env_mntr_trigger(phydm, &nhm_para, &clm_para, &trig_rpt);
 	if (hal_data->acs.trig_rst == (NHM_SUCCESS | CLM_SUCCESS)) {
@@ -296,18 +297,17 @@ void rtw_acs_info_dump(void *sel, _adapter *adapter)
 		hal_data->acs.scan_type ? 'A' : 'P', hal_data->acs.scan_time, hal_data->acs.igi, hal_data->acs.bw);
 
 	_RTW_PRINT_SEL(sel, "BW  20MHz\n");
-	_RTW_PRINT_SEL(sel, "%5s  %3s  %3s  %3s(%%)  %3s(%%)  %3s(%3s)  %3s\n",
-						"Index", "CH", "BSS", "CLM", "NHM", "NHM", "dBm", "ITF");
+	_RTW_PRINT_SEL(sel, "%5s  %3s  %3s  %3s(%%)  %3s(%%)  %3s\n",
+						"Index", "CH", "BSS", "CLM", "NHM", "ITF");
 
 	for (ch_idx = 0; ch_idx < chset->chs_len; ch_idx++) {
 		if (chset->chs[ch_idx].flags & RTW_CHF_DIS)
 			continue;
 		ch_num = rtw_get_ch_num_by_idx(adapter, ch_idx);
-		_RTW_PRINT_SEL(sel, "%5d  %3d  %3d  %6d  %6d  %8d  %3d\n",
+		_RTW_PRINT_SEL(sel, "%5d  %3d  %3d  %6d  %6d  %3d\n",
 						ch_idx, ch_num, hal_data->acs.bss_nums[ch_idx],
 						hal_data->acs.clm_ratio[ch_idx],
 						hal_data->acs.nhm_ratio[ch_idx],
-						hal_data->acs.env_mntr_rpt[ch_idx],
 						hal_data->acs.interference_time[ch_idx]);
 	}
 	#endif
@@ -437,8 +437,9 @@ void rtw_acs_current_info_dump(void *sel, _adapter *adapter)
 	}
 
 	_RTW_PRINT_SEL(sel, "Current BW %s\n", ch_width_str(bw));
-	_RTW_PRINT_SEL(sel, "Current IGI 0x%02x\n", rtw_phydm_get_cur_igi(adapter));
-	_RTW_PRINT_SEL(sel, "CLM:%d, NHM:%d\n",
+	if (0)
+		_RTW_PRINT_SEL(sel, "Current IGI 0x%02x\n", rtw_phydm_get_cur_igi(adapter));
+	_RTW_PRINT_SEL(sel, "CLM:%d, NHM:%d\n\n",
 		hal_data->acs.cur_ch_clm_ratio, hal_data->acs.cur_ch_nhm_ratio);
 }
 
@@ -450,7 +451,7 @@ void rtw_acs_update_current_info(_adapter *adapter)
 	hal_data->acs.cur_ch_nhm_ratio = rtw_phydm_nhm_ratio(adapter);
 
 	#ifdef CONFIG_RTW_ACS_DBG
-	//rtw_acs_current_info_dump(RTW_DBGDUMP, adapter);
+	rtw_acs_current_info_dump(RTW_DBGDUMP, adapter);
 	#endif
 }
 /*

@@ -369,10 +369,18 @@ void Init_ODM_ComInfo(_adapter *adapter)
 	struct dm_struct	*pDM_Odm = &(pHalData->odmpriv);
 	struct pwrctrl_priv *pwrctl = adapter_to_pwrctl(adapter);
 	struct rf_ctl_t *rfctl = dvobj_to_rfctl(dvobj);
+	struct registry_priv *regsty = dvobj_to_regsty(dvobj);
 	int i;
 
-	/*phydm_op_mode could be change for different scenarios: ex: SoftAP - PHYDM_BALANCE_MODE*/
-	pHalData->phydm_op_mode = PHYDM_PERFORMANCE_MODE;/*Service one device*/
+	if (regsty->def_bb_opmode > PHYDM_BALANCE_MODE) {
+		pHalData->phydm_op_mode = PHYDM_PERFORMANCE_MODE;/*Service one device*/
+		RTW_WARN("%s bb_opmode: %d is not supported, set to %d\n", __func__
+			, regsty->def_bb_opmode, pHalData->phydm_op_mode);
+	} else {
+		pHalData->phydm_op_mode = regsty->def_bb_opmode;
+		RTW_INFO("%s bb_opmode set to %d\n", __func__, pHalData->phydm_op_mode);
+	}
+
 	rtw_odm_init_ic_type(adapter);
 
 	if (rtw_get_intf_type(adapter) == RTW_GSPI)
@@ -444,6 +452,11 @@ void Init_ODM_ComInfo(_adapter *adapter)
 	odm_cmn_info_init(pDM_Odm, ODM_CMNINFO_EFUSE0X3D7, pHalData->efuse0x3d7);
 	odm_cmn_info_init(pDM_Odm, ODM_CMNINFO_EFUSE0X3D8, pHalData->efuse0x3d8);
 
+#ifdef CONFIG_RTL8822C
+	/* HW special type*/
+	odm_cmn_info_init(pDM_Odm, ODM_CMNINFO_HW_SPECIAL_TYPE, pHalData->hw_stype);
+#endif
+
 	/* waiting for PhyDMV034 support*/
 	odm_cmn_info_hook(pDM_Odm, ODM_CMNINFO_MANUAL_SUPPORTABILITY, &(adapter->registrypriv.phydm_ability)); 
 
@@ -451,15 +464,14 @@ void Init_ODM_ComInfo(_adapter *adapter)
 	odm_cmn_info_hook(pDM_Odm, ODM_CMNINFO_ADAPTIVITY, &rfctl->adaptivity_en);
 	phydm_adaptivity_info_init(pDM_Odm, PHYDM_ADAPINFO_TH_L2H_INI, adapter->registrypriv.adaptivity_th_l2h_ini);
 	phydm_adaptivity_info_init(pDM_Odm, PHYDM_ADAPINFO_TH_EDCCA_HL_DIFF, adapter->registrypriv.adaptivity_th_edcca_hl_diff);
-	rtw_odm_adaptivity_update(dvobj);
 
 	/*halrf info init*/
 	halrf_cmn_info_init(pDM_Odm, HALRF_CMNINFO_EEPROM_THERMAL_VALUE, pHalData->eeprom_thermal_meter);
 	halrf_cmn_info_init(pDM_Odm, HALRF_CMNINFO_PWT_TYPE, 0);
 	halrf_cmn_info_init(pDM_Odm, HALRF_CMNINFO_MP_POWER_TRACKING_TYPE, pHalData->txpwr_pg_mode);
 
-	if (rtw_odm_adaptivity_needed(adapter) == _TRUE)
-		rtw_odm_adaptivity_config_msg(RTW_DBGDUMP, adapter);
+	if (rtw_cfg_adaptivity_needed(adapter) == _TRUE)
+		rtw_cfg_adaptivity_config_msg(RTW_DBGDUMP, adapter);
 
 #ifdef CONFIG_IQK_PA_OFF
 	odm_cmn_info_init(pDM_Odm, ODM_CMNINFO_IQKPAOFF, 1);
@@ -679,8 +691,7 @@ void rtw_hal_turbo_edca(_adapter *adapter)
 	}
 
 	/* Check if the status needs to be changed. */
-	/* if ((bbtchange) || (!precvpriv->is_any_non_be_pkts)) { */
-	if ((bbtchange)) { /* bbtchange always true */
+	if ((bbtchange) || (!precvpriv->is_any_non_be_pkts)) {
 		cur_tx_bytes = dvobj->traffic_stat.cur_tx_bytes;
 		cur_rx_bytes = dvobj->traffic_stat.cur_rx_bytes;
 
@@ -848,10 +859,7 @@ void rtw_hal_turbo_edca(_adapter *adapter)
 		}
 
 		hal_data->is_turbo_edca = _TRUE;
-	}
-#if 0 /* bbtchange always true */
-/* Execution cannot reach this statement */
-	 else {
+	} else {
 		/*  */
 		/* Turn Off EDCA turbo here. */
 		/* Restore original EDCA according to the declaration of AP. */
@@ -862,7 +870,6 @@ void rtw_hal_turbo_edca(_adapter *adapter)
 			hal_data->is_turbo_edca = _FALSE;
 		}
 	}
-#endif
 
 }
 
@@ -1257,7 +1264,7 @@ void rtw_phydm_wd_lps_lclk_hdl(_adapter *adapter)
 
 #ifdef CONFIG_LPS_PG
 	if (pwrpriv->lps_level == LPS_PG) {
-		 if (rtw_hal_set_lps_pg_info_cmd(adapter, _FALSE) == _FAIL)
+		 if (rtw_hal_set_lps_pg_info_cmd(adapter) == _FAIL)
 		 	RTW_INFO(FUNC_ADPT_FMT": Send PG H2C command Fail! \n", 
 		 			 FUNC_ADPT_ARG(adapter));
 	}
@@ -1709,12 +1716,14 @@ static u8 _rtw_phydm_rfk_condition_check(_adapter *adapter, u8 is_scaning, u8 if
 	#endif
 
 	if (ifs_linked) {
-		if (is_scaning) {
+		if (adapter_to_rfctl(adapter)->offch_state != OFFCHS_NONE) {
+			rfk_allowed = _FALSE;
+			RTW_DBG("[RFK-CHK] RF-K not allowed due to offch_state\n");
+		} else if (is_scaning) {
 			rfk_allowed = _FALSE;
 			RTW_DBG("[RFK-CHK] RF-K not allowed due to ifaces under site-survey\n");
-		}
-		else {
-			rfk_allowed = rtw_mi_stayin_union_ch_chk(adapter) ? _TRUE : _FALSE;
+		} else {
+			rfk_allowed = rtw_mi_stayin_union_ch_chk(adapter, true) ? _TRUE : _FALSE;
 			if (rfk_allowed == _FALSE)
 				RTW_ERR("[RFK-CHK] RF-K not allowed due to ld_iface not stayin union ch\n");
 		}

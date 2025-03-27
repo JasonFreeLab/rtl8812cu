@@ -126,13 +126,15 @@ enum rtw_ft_capability {
 
 struct ft_roam_info {
 	u16	mdid;
-	u8	ft_cap;	
+	u8	ft_cap;
 	/*b0: FT over DS, b1: Resource Req Protocol Cap, b2~b7: Reserved*/
 	u8	updated_ft_ies[RTW_FT_MAX_IE_SZ];
 	u16	updated_ft_ies_len;
 	u8	ft_action[RTW_FT_MAX_IE_SZ];
 	u16	ft_action_len;
-	struct cfg80211_ft_event_params ft_event;
+#ifdef CONFIG_IOCTL_CFG80211
+ 	struct cfg80211_ft_event_params ft_event;
+#endif
 	u8	ft_roam_on_expired;
 	u8	ft_flags;
 	u32 ft_status;
@@ -164,7 +166,7 @@ void rtw_ft_update_stainfo(_adapter *padapter, WLAN_BSSID_EX *pnetwork);
 void rtw_ft_reassoc_event_callback(_adapter *padapter, u8 *pbuf);
 
 void rtw_ft_validate_akm_type(_adapter  *padapter,
-	struct wlan_network *pnetwork);
+	WLAN_BSSID_EX *network);
 
 void rtw_ft_update_bcn(_adapter *padapter, union recv_frame *precv_frame);
 

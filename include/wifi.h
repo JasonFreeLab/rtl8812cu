@@ -36,7 +36,7 @@
 #define WLAN_HDR_A3_QOS_LEN	26
 #define WLAN_HDR_A4_QOS_LEN	32
 #define WLAN_SSID_MAXLEN	32
-#define WLAN_DATA_MAXLEN	4052
+#define WLAN_DATA_MAXLEN	2312
 
 #define WLAN_A3_PN_OFFSET	24
 #define WLAN_A4_PN_OFFSET	30
@@ -1362,5 +1362,8 @@ struct rtw_regulatory {
 #define IW_ENCODE_ALG_SM4			0x20
 #endif
 #endif
+
+#define GET_MULTIPLE_BSSID_IDX_INDEX(_pEleStart) \
+	LE_BITS_TO_1BYTE((_pEleStart) + 2, 0, 8)
 
 #endif /* _WIFI_H_ */

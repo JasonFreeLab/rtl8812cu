@@ -2983,7 +2983,8 @@ void halrf_dpk_trigger(void *dm_void)
 		switch (dm->support_ic_type) {
 #if (RTL8822C_SUPPORT == 1)
 		case ODM_RTL8822C:
-			do_dpk_8822c(dm);
+			if((dm->rfe_type != 8) && (dm->rfe_type != 9))
+				do_dpk_8822c(dm);
 		break;
 #endif
 #if (RTL8814C_SUPPORT == 1)
@@ -3429,7 +3430,8 @@ void halrf_dpk_enable_disable(void *dm_void)
 	switch (dm->support_ic_type) {
 #if (RTL8822C_SUPPORT == 1)
 	case ODM_RTL8822C:
-		dpk_enable_disable_8822c(dm);
+		if((dm->rfe_type != 8) && (dm->rfe_type != 9))
+			dpk_enable_disable_8822c(dm);
 		break;
 #endif
 #if (RTL8195B_SUPPORT == 1)
@@ -3546,7 +3548,8 @@ void halrf_dpk_track(void *dm_void)
 
 #if (RTL8822C_SUPPORT == 1)
 	case ODM_RTL8822C:
-		dpk_track_8822c(dm);
+		if((dm->rfe_type != 8) && (dm->rfe_type != 9))
+			dpk_track_8822c(dm);
 		break;
 #endif
 
@@ -5199,13 +5202,13 @@ s8 _halrf_get_power_offset_by_thermal_8723f(void *dm_void, u8 path, s8 thermal_d
 		}
 	}
 
-	if (channel >= 16 && channel <= 96) {
+	if (channel >= 36 && channel <= 64) {
 		odm_move_memory(dm, thermal_up_a, txagc_offset_5ga_p[0], sizeof(thermal_up_a));
 		odm_move_memory(dm, thermal_down_a, txagc_offset_5ga_n[0], sizeof(thermal_down_a));
 	} else if (channel >= 100 && channel <= 144) {
 		 odm_move_memory(dm, thermal_up_a, txagc_offset_5ga_p[1], sizeof(thermal_up_a));
 		odm_move_memory(dm, thermal_down_a, txagc_offset_5ga_n[1], sizeof(thermal_down_a));
-	} else if (channel >= 149 && channel <= 253) {
+	} else if (channel >= 149 && channel <= 177) {
 		odm_move_memory(dm, thermal_up_a, txagc_offset_5ga_p[2], sizeof(thermal_up_a));
 		odm_move_memory(dm, thermal_down_a, txagc_offset_5ga_n[2], sizeof(thermal_down_a));
 	}

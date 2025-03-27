@@ -628,7 +628,7 @@ void rtw_build_assoc_req_wapi_ie(_adapter *padapter, unsigned char *pframe, stru
 	WAPI_TRACE(WAPI_MLME, "<========== %s\n", __FUNCTION__);
 }
 
-void rtw_wapi_on_assoc_ok(_adapter *padapter, PNDIS_802_11_VARIABLE_IEs pIE)
+void rtw_wapi_on_assoc_ok(_adapter *padapter)
 {
 	PRT_WAPI_T pWapiInfo = &(padapter->wapiInfo);
 	PRT_WAPI_STA_INFO pWapiSta;

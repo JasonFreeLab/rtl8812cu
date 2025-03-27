@@ -38,7 +38,7 @@
 
 /*---------------------------Define Local Constant---------------------------*/
 
-/*8822C DPK ver:0x20 20200106*/
+/*8822C DPK ver:0x21 20240219*/
 
 static u32
 _btc_wait_indirect_reg_ready_8822c(
@@ -266,9 +266,7 @@ void _dpk_information_8822c(
 	RF_DBG(dm, DBG_RF_DPK, "[DPK] TSSI/ Band/ CH/ BW = %d / %s / %d / %s\n",
 	       dpk_info->is_tssi_mode, dpk_info->dpk_band == 0 ? "2G" : "5G",
 	       dpk_info->dpk_ch,
-	       dpk_info->dpk_bw == 3 ? "20M" : (dpk_info->dpk_bw == 2 ? "40M" : 
-
-	       (dpk_info->dpk_bw == 1 ?"80M" : "other BW")));
+	       dpk_info->dpk_bw == 3 ? "20M" : (dpk_info->dpk_bw == 2 ? "40M" : "80M"));
 }
 
 void _dpk_rxbb_dc_cal_8822c(
@@ -337,7 +335,7 @@ void _dpk_tx_pause_8822c(
 	reg_rf0_a = (u8)odm_get_rf_reg(dm, RF_PATH_A, RF_0x00, 0xF0000);
 	reg_rf0_b = (u8)odm_get_rf_reg(dm, RF_PATH_B, RF_0x00, 0xF0000);
 
-	while (((reg_rf0_a != 3) && (reg_rf0_b != 3)) && count < 2500) {
+	while (((reg_rf0_a == 2) || (reg_rf0_b == 2)) && count < 2500) {
 		reg_rf0_a = (u8)odm_get_rf_reg(dm, RF_PATH_A, RF_0x00, 0xF0000);
 		reg_rf0_b = (u8)odm_get_rf_reg(dm, RF_PATH_B, RF_0x00, 0xF0000);
 		ODM_delay_us(2);
@@ -555,6 +553,22 @@ u32 _dpk_rf_setting_8822c(
 	u32 value32 = 0, ori_txbb = 0;
 	u8 i;
 
+#if 0
+	if (phydm_set_bb_dbg_port(dm, DBGPORT_PRI_1, 0x944 | (path << 9))) {
+		value32 = phydm_get_bb_dbg_port_val(dm);
+		phydm_release_bb_dbg_port(dm);
+	}	
+
+	txidx_offset = (value32 >> 8) & 0x7f;
+
+	if ((txidx_offset >> 6) == 1)
+		txidx_offset = (txidx_offset - 0x80) / 4;
+	else 
+		txidx_offset = txidx_offset / 4;	
+
+	RF_DBG(dm, DBG_RF_DPK, "[DPK] S%d txidx_offset = 0x%x\n",
+	       path, txidx_offset);
+#endif
 	if (dpk_info->dpk_band == 0x0) { /*2G*/
 		/*TXAGC for gainloss*/
 		odm_set_rf_reg(dm, (enum rf_path)path,
@@ -1800,7 +1814,7 @@ u8 dpk_reload_8822c(
 
 	i = _dpk_reload_index_8822c(dm);
 
-	if (i != 99) {
+	if (i < DPK_RF18) {
 		RF_DBG(dm, DBG_RF_DPK, "[DPK] DPK reload for RF0x18 0x%x!!\n", dpk_info->dpk_rf18[i]);
 		_dpk_reload_data_8822c(dm, i);
 		dpk_info->dpk_status = dpk_info->dpk_status | BIT(0);
@@ -2055,6 +2069,13 @@ void dpk_track_8822c(
 	for (path = 0; path < DPK_RF_PATH_NUM_8822C; path++) {
 		delta_dpk[path] = dpk_info->thermal_dpk[path] - thermal_value[path];
 
+		if((dm->rfe_type == 8) || (dm->rfe_type == 9)) {
+			if (dpk_info->dpk_band == 0) /*2G*/
+				delta_dpk[path] = delta_dpk[path] - 17;
+			else
+				delta_dpk[path] = delta_dpk[path] - 14;
+		}
+
 		offset[path] = (delta_dpk[path] - dpk_info->thermal_dpk_delta[path]) & 0x7f;
 
 	RF_DBG(dm, DBG_RF_DPK_TRACK,
@@ -2214,11 +2235,11 @@ void dpk_c2h_report_transfer_8822c(
 	}
 
 	idx = _dpk_reload_index_8822c(dm);
-
-	for (i = 0; i < DPK_RF_PATH_NUM_8822C; i++) {
-		dpk_info->thermal_dpk[i] = dpk_c2h_report.therm[idx][i];
-		dpk_info->thermal_dpk_delta[i] = dpk_c2h_report.therm_delta[idx][i];
-	}
+	if (idx < 2)
+		for (i = 0; i < DPK_RF_PATH_NUM_8822C; i++) {
+			dpk_info->thermal_dpk[i] = dpk_c2h_report.therm[idx][i];
+			dpk_info->thermal_dpk_delta[i] = dpk_c2h_report.therm_delta[idx][i];
+		}
 #if 0
 	for (i = 0; i < DPK_C2H_REPORT_LEN_8822C; i++)
 		RF_DBG(dm, DBG_RF_DPK, "[DPK] buf[%d] = 0x%x\n", i, *(buf + i));

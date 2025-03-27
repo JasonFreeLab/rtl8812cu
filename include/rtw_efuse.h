@@ -247,7 +247,7 @@ int	Efuse_PgPacketWrite(PADAPTER pAdapter, u8 offset, u8 word_en, u8 *data, BOOL
 void	efuse_WordEnableDataRead(u8 word_en, u8 *sourdata, u8 *targetdata);
 u8	Efuse_WordEnableDataWrite(PADAPTER pAdapter, u16 efuse_addr, u8 word_en, u8 *data, BOOLEAN bPseudoTest);
 void	EFUSE_ShadowMapUpdate(PADAPTER pAdapter, u8 efuseType, BOOLEAN bPseudoTest);
-void	EFUSE_ShadowRead(PADAPTER pAdapter, u8 Type, u16 Offset, u32 *Value);
+void	EFUSE_ShadowRead(PADAPTER pAdapter, u8 Type, u16 Offset, void *Value);
 #define efuse_logical_map_read(adapter, type, offset, value) EFUSE_ShadowRead((adapter), (type), (offset), (value))
 
 BOOLEAN rtw_file_efuse_IsMasked(PADAPTER pAdapter, u16 Offset, u8 *maskbuf);

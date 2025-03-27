@@ -484,7 +484,6 @@ enum btc_wl2bt_scoreboard {
 	BTC_SCBD_FIX2M		= BIT(10),
 	BTC_SCBD_BT_HILNA	= BIT(13),
 	BTC_SCBD_MAILBOX_DBG	= BIT(14),
-	BTC_SCBD_WLS1		= BIT(15),
 	BTC_SCBD_ALL		= 0xffff,
 	BTC_SCBD_ALL_32BIT	= 0xffffffff
 };
@@ -2226,6 +2225,6 @@ EXhalbtcoutsrc_DisplayAntDetection(
 #define	MASK20BITS	0xfffff
 #define	MASKH4BITS	0xf0000000
 #define	MASKOFDM_D	0xffc00000
-#define	MASKCCK	0x3f3f3f3f
+#define	MASKCCK		0x3f3f3f3f
 
 #endif
